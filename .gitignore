@@ -1,0 +1,21 @@
+# Gradle / Android
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APKs ficam nas Releases do GitHub, não no código
+*.apk
+*.aab
+
+# chaves de assinatura (nunca enviar)
+*.jks
+*.keystore
+
+# configurações locais do Claude Code
+.claude/settings.local.json

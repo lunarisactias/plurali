@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <size android:width="96dp" android:height="96dp" />
+            <solid android:color="#FFD6AC5E" />
+            <corners android:radius="19dp" />
+        </shape>
+    </item>
+    <item android:drawable="@drawable/ic_stat_plurali" android:gravity="center" android:width="48dp" android:height="48dp" />
+</layer-list>

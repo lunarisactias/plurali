@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_desc">Mostra quem está no front</string>
+    <string name="tile_label">Front</string>
+    <string name="widget_photo_desc">Foto de quem está no front. Toque para trocar</string>
+</resources>
