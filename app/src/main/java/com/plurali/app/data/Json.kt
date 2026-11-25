@@ -282,6 +282,8 @@ object Json {
         .put("avatarShape", a.avatarShape).put("strip", a.strip).put("border", a.border).put("decor", a.decor).put("headerMarks", a.headerMarks)
         .put("pattern", a.pattern.toDouble()).put("animate", a.animate).putN("wallpaper", a.wallpaper)
         .put("wallpaperDim", a.wallpaperDim.toDouble()).put("followFront", a.followFront)
+        .putN("bg", a.bg).putN("bg2", a.bg2).putN("card", a.card).putN("bars", a.bars).putN("text", a.text)
+        .putN("pronoun", a.pronoun).putN("chip", a.chip).putN("patternColor", a.patternColor).put("memberTint", a.memberTint.toDouble())
 
     fun decodeAppearance(o: JSONObject): Appearance {
         val d = Appearance()
@@ -294,6 +296,9 @@ object Json {
             pattern = o.optDouble("pattern", 1.0).toFloat(),
             animate = o.optBoolean("animate"), wallpaper = o.sN("wallpaper"), wallpaperDim = o.optDouble("wallpaperDim", 0.55).toFloat(),
             followFront = o.optBoolean("followFront"),
+            bg = o.lN("bg"), bg2 = o.lN("bg2"), card = o.lN("card"), bars = o.lN("bars"), text = o.lN("text"),
+            pronoun = o.lN("pronoun"), chip = o.lN("chip"), patternColor = o.lN("patternColor"),
+            memberTint = o.optDouble("memberTint", 0.0).toFloat(),
         )
     }
 

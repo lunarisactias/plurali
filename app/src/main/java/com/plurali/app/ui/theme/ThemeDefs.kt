@@ -23,6 +23,7 @@ data class Palette(
     val cardTop: Long? = null,        // se tiver, o cartão ganha um degradê card → cardTop
     val pattern: List<Long>,          // cores dos desenhos de fundo
     val patternAlpha: Float,
+    val bars: Long? = null,           // cor das barras de cima e de baixo (null = a dos cartões)
 )
 
 /** Tudo que muda num tema além das cores: formatos, caixas, contornos, enfeites e letras. */
@@ -230,3 +231,24 @@ fun cardShapeOf(id: String, theme: ThemeDef): Shape = when (id) {
     else -> theme.cardShape
 }
 
+
+/** Combinação pronta de cores, aplicada por cima de qualquer tema. */
+data class ColorPreset(
+    val name: String,
+    val bg: Long, val card: Long, val accent: Long, val pronoun: Long,
+    val bg2: Long? = null, val bars: Long? = null, val chip: Long? = null, val text: Long? = null,
+)
+
+val COLOR_PRESETS: List<ColorPreset> = listOf(
+    ColorPreset("Noite", 0xFF0F1220, 0xFF1A1F33, 0xFF7C9CFF, 0xFF9FB4FF, bg2 = 0xFF1B1036),
+    ColorPreset("Pastel", 0xFFFDF6F0, 0xFFFFFFFF, 0xFFE58FB0, 0xFF9D8CD6, chip = 0xFFFBE0EA),
+    ColorPreset("Floresta", 0xFF13221A, 0xFF1D3326, 0xFF7BC47F, 0xFFB5D99C, bg2 = 0xFF0D1712),
+    ColorPreset("Oceano", 0xFFE4F1F7, 0xFFFFFFFF, 0xFF1E7FA8, 0xFF2A9D8F, bg2 = 0xFFCFE6F1, bars = 0xFFD3E9F3),
+    ColorPreset("Pôr do sol", 0xFF2A1420, 0xFF3A1D2B, 0xFFFF8A5B, 0xFFFFC371, bg2 = 0xFF4A1F2F),
+    ColorPreset("Lavanda", 0xFFF3EEFB, 0xFFFFFFFF, 0xFF8E6CC9, 0xFFC06C9E, chip = 0xFFE6DCF7),
+    ColorPreset("Café", 0xFF2A201B, 0xFF392C25, 0xFFD4A373, 0xFFE9C46A),
+    ColorPreset("Menta", 0xFFEAF7F1, 0xFFFFFFFF, 0xFF2BAE84, 0xFF4E8FB5, chip = 0xFFD5F0E4),
+    ColorPreset("Cereja", 0xFFFFF0F2, 0xFFFFFFFF, 0xFFD23B5B, 0xFF8E3D63, bars = 0xFFFFE1E7),
+    ColorPreset("Grafite", 0xFF1B1C1F, 0xFF26282C, 0xFFB0BEC5, 0xFF90CAF9),
+    ColorPreset("Alto contraste", 0xFF000000, 0xFF111111, 0xFFFFD600, 0xFF80D8FF, text = 0xFFFFFFFF, bars = 0xFF000000),
+)

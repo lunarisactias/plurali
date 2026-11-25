@@ -65,7 +65,7 @@ private fun SpBottomBar(selected: Int, onSelect: (Int) -> Unit, onMenu: () -> Un
         Triple("Fronters", Icons.Filled.People, 1),
         Triple("Custom fronts", Icons.Filled.Mood, 2),
     )
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    Surface(color = com.plurali.app.LocalExtra.current.bottomBar, contentColor = com.plurali.app.LocalExtra.current.barContent) {
         Row(
             Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

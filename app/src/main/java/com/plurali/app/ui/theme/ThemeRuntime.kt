@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -67,8 +69,48 @@ data class UiStyle(
 
 val LocalUi = compositionLocalOf { buildUi(Appearance(), dark = true) }
 
+/** Mistura duas cores (t = 0 → a, 1 → b). */
+fun mixColor(a: Long, b: Long, t: Float): Long {
+    val ca = Color(a); val cb = Color(b)
+    return androidx.compose.ui.graphics.lerp(ca, cb, t.coerceIn(0f, 1f)).toArgb().toLong() and 0xFFFFFFFFL
+}
+
+fun luminanceOf(c: Long): Float = Color(c).luminance()
+
+/** Cor de texto que dá leitura sobre o fundo dado. */
+fun readableOn(bg: Long): Long = if (luminanceOf(bg) > 0.5f) 0xFF1D2228 else 0xFFF1F1F3
+
+/** Aplica as cores escolhidas pela pessoa por cima da paleta do tema. */
+fun Palette.withOverrides(a: Appearance): Palette {
+    var p = this
+    a.bg?.let { p = p.copy(bg = it, dark = luminanceOf(it) < 0.5f) }
+    a.card?.let { p = p.copy(card = it, cardTop = null, frontButton = it) }
+    // texto: o escolhido ou, se mudou fundo/cartão, um automático que dê leitura
+    val surface = a.card ?: a.bg
+    val text = a.text ?: surface?.let { readableOn(it) }
+    if (text != null) {
+        val base = surface ?: p.card
+        p = p.copy(text = text, muted = mixColor(text, base, 0.38f))
+    }
+    if (a.card != null || a.bg != null || a.text != null) {
+        // tons derivados para campos, linhas e conversas combinarem com as cores novas
+        val base = a.card ?: p.card
+        p = p.copy(
+            field = mixColor(base, p.text, 0.07f), line = mixColor(base, p.text, 0.18f),
+            timer = if (luminanceOf(base) > 0.5f) mixColor(base, p.text, 0.08f) else mixColor(base, 0xFF000000, 0.4f),
+            pill = mixColor(base, p.text, 0.14f), bubble = mixColor(base, p.text, 0.14f),
+        )
+    }
+    a.pronoun?.let { p = p.copy(pronoun = it) }
+    a.chip?.let { p = p.copy(pill = it, bubble = it) }
+    a.patternColor?.let { pc -> p = p.copy(pattern = List(maxOf(p.pattern.size, 1)) { pc }, patternAlpha = maxOf(p.patternAlpha, 0.18f)) }
+    a.bars?.let { p = p.copy(bars = it) }
+    return p
+}
+
 fun buildUi(a: Appearance, dark: Boolean): UiStyle {
-    val th = themeOf(a.theme, dark)
+    val th0 = themeOf(a.theme, dark)
+    val th = th0.copy(palette = th0.palette.withOverrides(a))
     val avId = if (a.avatarShape == "theme") th.avatar else a.avatarShape
     return UiStyle(
         theme = th, a = a,
@@ -131,7 +173,8 @@ fun currentAppearance(): Appearance {
 }
 
 fun Appearance.isDark(systemDark: Boolean): Boolean =
-    if (theme == "classic") when (mode) { "light" -> false; "system" -> systemDark; else -> true }
+    if (bg != null) luminanceOf(bg) < 0.5f
+    else if (theme == "classic") when (mode) { "light" -> false; "system" -> systemDark; else -> true }
     else themeOf(theme, true).palette.dark
 
 @Composable
@@ -153,7 +196,8 @@ fun ThemedBackground(modifier: Modifier = Modifier) {
     val bg = MaterialTheme.colorScheme.background
     val wp = rememberAvatar(ui.a.wallpaper)
     val t by animPhase(ui.a.animate && ui.a.pattern > 0f, 30_000)
-    Box(modifier.background(bg)) {
+    val bgMod = ui.a.bg2?.let { Modifier.background(Brush.verticalGradient(listOf(bg, Color(it)))) } ?: Modifier.background(bg)
+    Box(modifier.then(bgMod)) {
         if (wp != null) {
             Image(wp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Box(Modifier.fillMaxSize().background(bg.copy(alpha = ui.a.wallpaperDim)))
@@ -200,8 +244,11 @@ fun Modifier.themedCard(ui: UiStyle, container: Color, memberColor: Color?, line
         }
         .clip(shape)
         .then(
-            if (pal.cardTop != null) Modifier.background(Brush.verticalGradient(listOf(Color(pal.cardTop), container)))
-            else Modifier.background(container),
+            // cor do membro misturada no fundo do cartão (se a pessoa escolheu)
+            (if (memberColor != null && ui.a.memberTint > 0f) androidx.compose.ui.graphics.lerp(container, memberColor, ui.a.memberTint) else container).let { fill ->
+                if (pal.cardTop != null) Modifier.background(Brush.verticalGradient(listOf(Color(pal.cardTop), fill)))
+                else Modifier.background(fill)
+            },
         )
         .drawBehind {
             val mc = memberColor ?: return@drawBehind

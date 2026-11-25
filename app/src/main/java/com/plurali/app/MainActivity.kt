@@ -88,7 +88,10 @@ object Sp {
 }
 
 /** Cores extras que mudam entre claro e escuro. */
-data class ExtraColors(val dark: Boolean, val frontButton: Color, val timer: Color, val myBubble: Color)
+data class ExtraColors(
+    val dark: Boolean, val frontButton: Color, val timer: Color, val myBubble: Color,
+    val topBar: Color = Color.Unspecified, val bottomBar: Color = Color.Unspecified, val barContent: Color = Color.Unspecified,
+)
 
 val LocalExtra = staticCompositionLocalOf { ExtraColors(true, Color(0xFF22222C), Color(0xFF12131A), Color(0xFF384048)) }
 
@@ -146,7 +149,8 @@ fun PluraliTheme(a: Appearance, content: @Composable () -> Unit) {
     )
     val th = ui.theme
     val shapes = Shapes(extraSmall = th.small, small = th.small, medium = th.medium, large = th.large, extraLarge = th.large)
-    val extra = ExtraColors(p.dark, c(p.frontButton), c(p.timer), c(p.bubble))
+    val barContent = p.bars?.let { c(com.plurali.app.ui.theme.readableOn(it)) } ?: c(p.text)
+    val extra = ExtraColors(p.dark, c(p.frontButton), c(p.timer), c(p.bubble), c(p.bars ?: p.card), c(p.bars ?: p.field), barContent)
     val density = LocalDensity.current
     CompositionLocalProvider(
         LocalExtra provides extra,

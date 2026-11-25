@@ -306,7 +306,17 @@ data class Appearance(
     val animate: Boolean = false,
     val wallpaper: String? = null,       // imagem de fundo (wallpapers/...)
     val wallpaperDim: Float = 0.55f,
-    val followFront: Boolean = false,    // (só no perfil Sistema) usar a aparência de quem está no front
+    val followFront: Boolean = false,
+    // cores próprias (null = cor do tema)
+    val bg: Long? = null,                // fundo
+    val bg2: Long? = null,               // segunda cor do fundo (degradê)
+    val card: Long? = null,              // cartões e caixas
+    val bars: Long? = null,              // barra de cima e de baixo
+    val text: Long? = null,              // texto (null = automático, para dar leitura)
+    val pronoun: Long? = null,           // pronomes e detalhes
+    val chip: Long? = null,              // seleção, etiquetas e filtros
+    val patternColor: Long? = null,      // desenhos do fundo e enfeites
+    val memberTint: Float = 0f,          // quanto o cartão de cada membro pega a cor dele (0 = nada)    // (só no perfil Sistema) usar a aparência de quem está no front
 )
 
 data class AppData(

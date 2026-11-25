@@ -287,10 +287,12 @@ fun ScreenScaffold(
                     }
                 },
                 actions = actions,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
+                colors = com.plurali.app.LocalExtra.current.let { ex ->
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = ex.topBar, scrolledContainerColor = ex.topBar,
+                        titleContentColor = ex.barContent, navigationIconContentColor = ex.barContent, actionIconContentColor = ex.barContent,
+                    )
+                },
             )
             com.plurali.app.ui.theme.ThemeDecorBand()
             }
