@@ -22,6 +22,8 @@ Kotlin + Jetpack Compose. Os dados ficam só no aparelho (`files/data.json`, mai
 - **Lembretes** de horário (alarme exato) e **timers de front**; enquetes com prazo que fecham sozinhas
 - **Notificação fixa** de front com botões de troca, **widget**, **widgets de foto 1x1 e 2x2** (só a foto de quem está no front; tocar abre um menu para trocar, somar ou tirar alguém) e **atalho nas configurações rápidas**
 - **Plano de segurança** acessível sem login e **"Sou novo aqui"** para novos alters
+- **Tela de entrada simples**: Login do Sistema · Entrar sem login · Entrar com meu perfil (a lista de perfis só aparece nessa última, com bolinha de mensagens não lidas)
+- **Mural de boas-vindas em grade**: textos e fotos (planta da casa, família…) lado a lado, com tamanho ajustável e foto em tela cheia com zoom
 - Campos com **visibilidade** (todos / só membros / privado), **busca** geral
 
 ## Plurali Companion (app para pessoas de fora do sistema)

@@ -146,9 +146,9 @@ fun FrontersTab(nav: NavHostController) {
             // para quem entra sem login: as boas-vindas vêm primeiro
             if (who is Who.Guest && d.welcome.isNotEmpty()) item(key = "welcome") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WelcomeCards(d.welcome.take(2), total = d.welcome.size)
-                    if (d.welcome.size > 2) Button(onClick = { nav.go("welcome") }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Continuar lendo (${d.welcome.size - 2} ${if (d.welcome.size - 2 == 1) "cartão" else "cartões"})")
+                    WelcomeCards(d.welcome.take(4), total = d.welcome.size)
+                    if (d.welcome.size > 4) Button(onClick = { nav.go("welcome") }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Ver o mural todo (mais ${d.welcome.size - 4} ${if (d.welcome.size - 4 == 1) "item" else "itens"})")
                     }
                 }
             }

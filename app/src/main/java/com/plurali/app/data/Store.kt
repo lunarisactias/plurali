@@ -319,12 +319,12 @@ object Store {
     }
 
     // ---------- backup ----------
-    private val fileDirs = setOf("avatars", "banners", "chat", "wallpapers")
+    private val fileDirs = setOf("avatars", "banners", "chat", "wallpapers", "welcome")
 
     /** Todos os arquivos (fotos) usados pelos dados: avatares, capas e imagens das conversas. */
     private fun AppData.referencedFiles(): Set<String> =
         ((members + pendingMembers).flatMap { listOfNotNull(it.avatar, it.banner) } + messages.mapNotNull { it.image } +
-            appearance.values.mapNotNull { it.wallpaper }).toSet()
+            appearance.values.mapNotNull { it.wallpaper } + welcome.mapNotNull { it.image }).toSet()
 
     private fun safePath(p: String): Boolean {
         val parts = p.split('/')

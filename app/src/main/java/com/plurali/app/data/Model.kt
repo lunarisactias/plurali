@@ -212,7 +212,14 @@ val DEFAULT_CONTACTS = listOf(
 )
 
 /** Cartão do mural de boas-vindas (para quem está chegando pela primeira vez). Mostrados em ordem. */
-data class WelcomeCard(val id: String, val title: String, val text: String, val color: Long = 0xFFD6AC5E)
+/**
+ * Item do mural de boas-vindas: texto e/ou foto (planta da casa, família, pets…).
+ * size = largura numa grade de 6 colunas: 2 = pequeno (1/3), 3 = médio (1/2), 4 = grande (2/3), 6 = largura toda.
+ */
+data class WelcomeCard(
+    val id: String, val title: String, val text: String, val color: Long = 0xFFD6AC5E,
+    val image: String? = null, val size: Int = 6,
+)
 
 val SUGGESTED_WELCOME = listOf(
     WelcomeCard("w1", "Oi. Você está em segurança.",

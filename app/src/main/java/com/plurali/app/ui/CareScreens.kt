@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -24,6 +28,7 @@ import com.plurali.app.data.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 // ===================== Plano de segurança =====================
 
@@ -239,23 +244,81 @@ fun PendingMembersBanner(d: AppData) {
 
 // ===================== Mural de boas-vindas =====================
 
-/** Os cartões de boas-vindas, em sequência. Usado na tela própria, no início (sem login) e em "Sou novo aqui". */
+private val WELCOME_SIZES = listOf(2 to "Pequeno", 3 to "Médio", 4 to "Grande", 6 to "Largura toda")
+
+/** Agrupa os itens em linhas de até 6 colunas, na ordem. */
+private fun packRows(cards: List<WelcomeCard>): List<List<WelcomeCard>> {
+    val rows = mutableListOf<MutableList<WelcomeCard>>()
+    var used = 0
+    for (c in cards) {
+        val s = c.size.coerceIn(2, 6)
+        if (rows.isEmpty() || used + s > 6) { rows.add(mutableListOf()); used = 0 }
+        rows.last().add(c); used += s
+    }
+    return rows
+}
+
+/**
+ * O mural de boas-vindas em grade: textos e fotos lado a lado, cada um com seu tamanho.
+ * Cada linha sempre ocupa a largura toda (os itens esticam na proporção), então nada fica torto.
+ * Usado na tela própria, no início (sem login) e em "Sou novo aqui".
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun WelcomeCards(cards: List<WelcomeCard>, onEdit: ((WelcomeCard) -> Unit)? = null, total: Int = cards.size) {
+fun WelcomeCards(
+    cards: List<WelcomeCard>,
+    onEdit: ((WelcomeCard) -> Unit)? = null,
+    total: Int = cards.size,
+    onOpenPhoto: ((WelcomeCard) -> Unit)? = null,
+) {
+    var viewing by remember { mutableStateOf<WelcomeCard?>(null) }
+    val open = onOpenPhoto ?: { w: WelcomeCard -> viewing = w }
+    val index = cards.withIndex().associate { it.value.id to it.index }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        cards.forEachIndexed { i, w ->
-            Row(
-                Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .then(if (onEdit != null) Modifier.clickable { onEdit(w) } else Modifier),
-            ) {
-                Box(Modifier.width(6.dp).fillMaxHeight().background(androidx.compose.ui.graphics.Color(w.color)))
-                Column(Modifier.padding(16.dp)) {
-                    Text("${i + 1} de $total", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (w.title.isNotBlank()) Text(w.title, style = MaterialTheme.typography.titleLarge)
-                    if (w.text.isNotBlank()) Text(w.text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 4.dp))
+        packRows(cards).forEach { row ->
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { w ->
+                    WelcomeTile(
+                        w, (index[w.id] ?: 0) + 1, total,
+                        Modifier.weight(w.size.coerceIn(2, 6).toFloat()).fillMaxHeight(),
+                        onClick = { if (w.image != null) open(w) else onEdit?.invoke(w) },
+                        onLongClick = onEdit?.let { { it(w) } },
+                    )
                 }
             }
+        }
+    }
+    viewing?.let { v ->
+        val photos = cards.filter { it.image != null }
+        PhotoViewer(photos, photos.indexOfFirst { it.id == v.id }.coerceAtLeast(0), onEdit = onEdit?.let { e -> { w: WelcomeCard -> viewing = null; e(w) } }) { viewing = null }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun WelcomeTile(w: WelcomeCard, n: Int, total: Int, modifier: Modifier, onClick: () -> Unit, onLongClick: (() -> Unit)?) {
+    val small = w.size <= 3
+    val imgH = when (w.size) { 2 -> 110.dp; 3 -> 140.dp; 4 -> 170.dp; else -> 210.dp }
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        Box(Modifier.fillMaxWidth().height(5.dp).background(androidx.compose.ui.graphics.Color(w.color)))
+        if (w.image != null) Box {
+            StoredImage(w.image, Modifier.fillMaxWidth().height(imgH))
+            Icon(
+                Icons.Filled.ZoomIn, "Ver maior", tint = androidx.compose.ui.graphics.Color.White,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f), RoundedCornerShape(50)).padding(4.dp).size(16.dp),
+            )
+        }
+        if (w.title.isNotBlank() || w.text.isNotBlank() || w.image == null) Column(Modifier.padding(if (small) 10.dp else 16.dp)) {
+            if (total > 1) Text("$n de $total", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (w.title.isNotBlank()) Text(w.title, style = if (small) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge)
+            if (w.text.isNotBlank()) Text(
+                w.text, style = if (small) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
 }
@@ -264,21 +327,40 @@ fun WelcomeCards(cards: List<WelcomeCard>, onEdit: ((WelcomeCard) -> Unit)? = nu
 fun WelcomeScreen(nav: NavHostController?, onClose: (() -> Unit)?) {
     val d by Store.data.collectAsState()
     val who = LocalWho.current
-    var edit by remember { mutableStateOf<WelcomeCard?>(null) }
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var edit by remember { mutableStateOf<WelcomeCard?>(null) } // item sendo editado (estado vivo do diálogo)
+    var busy by remember { mutableStateOf(false) }
     val canEdit = who.isAdmin
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        val cur = edit
+        if (uri != null && cur != null) scope.launch {
+            busy = true
+            val path = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { saveImage(ctx, uri, "welcome", cur.id, aspect = null, maxSide = 2000) }
+            busy = false
+            if (path != null) edit = edit?.copy(image = path)
+        }
+    }
+    fun pickPhoto() = pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+
     ScreenScaffold(
         "Boas-vindas",
         onBack = onClose,
-        fab = { if (canEdit) FloatingActionButton(onClick = { edit = WelcomeCard(newId(), "", "") }) { Icon(Icons.Filled.Add, "Novo cartão") } },
+        fab = {
+            if (canEdit) ExtendedFloatingActionButton(
+                onClick = { edit = WelcomeCard(newId(), "", "", size = 6) },
+                icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Novo item") },
+            )
+        },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (canEdit) Text(
-                "Este mural aparece para quem entra sem login (ex.: um alter que acabou de chegar): " +
-                    "na tela de login, no início e em “Sou novo aqui”. Escreva em sequência o que a pessoa precisa saber. Toque num cartão para editar.",
+                "Este mural aparece para quem entra sem login (ex.: um alter que acabou de chegar): na tela de entrada, no início e em “Sou novo aqui”. " +
+                    "Cada item pode ter texto e/ou foto (planta da casa, família, pets…) e um tamanho. Toque para editar; nas fotos, toque para ver maior e segure para editar.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (d.welcome.isEmpty()) {
-                EmptyHint(if (canEdit) "Nenhum cartão ainda." else "O sistema ainda não escreveu as boas-vindas.")
+                EmptyHint(if (canEdit) "Nenhum item ainda." else "O sistema ainda não escreveu as boas-vindas.")
                 if (canEdit) Button(onClick = { Store.setWelcome(SUGGESTED_WELCOME.map { it.copy(id = newId()) }) }) {
                     Icon(Icons.Filled.AutoAwesome, null); Spacer(Modifier.width(8.dp)); Text("Começar com textos sugeridos")
                 }
@@ -288,28 +370,61 @@ fun WelcomeScreen(nav: NavHostController?, onClose: (() -> Unit)?) {
                     Icon(Icons.Filled.HealthAndSafety, null); Spacer(Modifier.width(8.dp)); Text("Plano de segurança")
                 }
             }
-            Spacer(Modifier.height(72.dp))
+            Spacer(Modifier.height(80.dp))
         }
     }
-    edit?.let { w0 ->
-        val isNew = d.welcome.none { it.id == w0.id }
-        var w by remember(w0.id) { mutableStateOf(w0) }
+
+    edit?.let { w ->
+        val isNew = d.welcome.none { it.id == w.id }
         AlertDialog(
             onDismissRequest = { edit = null },
-            title = { Text(if (isNew) "Novo cartão" else "Editar cartão") },
+            title = { Text(if (isNew) "Novo item" else "Editar item") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(w.title, { w = w.copy(title = it) }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(w.text, { w = w.copy(text = it) }, label = { Text("Texto") }, minLines = 4, modifier = Modifier.fillMaxWidth())
-                    ColorPicker(w.color) { w = w.copy(color = it) }
+                    // foto
+                    if (w.image != null) {
+                        StoredImage(w.image, Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(10.dp)))
+                        Row {
+                            TextButton(onClick = { pickPhoto() }) { Icon(Icons.Filled.Image, null); Spacer(Modifier.width(4.dp)); Text("Trocar foto") }
+                            TextButton(onClick = { edit = w.copy(image = null) }) { Text("Tirar foto", color = MaterialTheme.colorScheme.error) }
+                        }
+                    } else OutlinedButton(onClick = { pickPhoto() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Filled.AddPhotoAlternate, null); Spacer(Modifier.width(8.dp)); Text(if (busy) "Carregando…" else "Adicionar foto (opcional)")
+                    }
+                    OutlinedTextField(w.title, { edit = w.copy(title = it) }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        w.text, { edit = w.copy(text = it) }, label = { Text(if (w.image != null) "Legenda / texto" else "Texto") },
+                        minLines = 3, modifier = Modifier.fillMaxWidth(),
+                    )
+                    // tamanho, com desenho de quanto ocupa da largura
+                    Text("Tamanho no mural", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        WELCOME_SIZES.forEach { (s, l) ->
+                            val sel = w.size == s
+                            Column(
+                                Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                    .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    .clickable { edit = w.copy(size = s) }.padding(6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Row(Modifier.fillMaxWidth().height(14.dp)) {
+                                    Box(Modifier.weight(s.toFloat()).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.primary))
+                                    if (s < 6) Box(Modifier.weight((6 - s).toFloat()).fillMaxHeight())
+                                }
+                                Text(l, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
+                    Text("Itens menores ficam lado a lado.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ColorPicker(w.color) { edit = w.copy(color = it) }
                     if (!isNew) Row {
-                        TextButton(onClick = { Store.moveWelcome(w.id, -1) }) { Icon(Icons.Filled.KeyboardArrowUp, null); Text("Subir") }
-                        TextButton(onClick = { Store.moveWelcome(w.id, 1) }) { Icon(Icons.Filled.KeyboardArrowDown, null); Text("Descer") }
+                        TextButton(onClick = { Store.moveWelcome(w.id, -1) }) { Icon(Icons.Filled.KeyboardArrowUp, null); Text("Antes") }
+                        TextButton(onClick = { Store.moveWelcome(w.id, 1) }) { Icon(Icons.Filled.KeyboardArrowDown, null); Text("Depois") }
                     }
                 }
             },
             confirmButton = {
-                TextButton(enabled = w.title.isNotBlank() || w.text.isNotBlank(), onClick = { Store.upsertWelcome(w); edit = null }) { Text("Salvar") }
+                TextButton(enabled = w.title.isNotBlank() || w.text.isNotBlank() || w.image != null, onClick = { Store.upsertWelcome(w); edit = null }) { Text("Salvar") }
             },
             dismissButton = {
                 Row {
@@ -318,5 +433,48 @@ fun WelcomeScreen(nav: NavHostController?, onClose: (() -> Unit)?) {
                 }
             },
         )
+    }
+}
+
+/** Foto em tela cheia: zoom com dois dedos, arrastar e passar para a próxima. */
+@Composable
+private fun PhotoViewer(list: List<WelcomeCard>, start: Int, onEdit: ((WelcomeCard) -> Unit)?, onClose: () -> Unit) {
+    if (list.isEmpty()) { onClose(); return }
+    var i by remember { mutableStateOf(start.coerceIn(0, list.lastIndex)) }
+    val p = list[i.coerceIn(0, list.lastIndex)]
+    var scale by remember(p.id) { mutableStateOf(1f) }
+    var offset by remember(p.id) { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val white = androidx.compose.ui.graphics.Color.White
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+            StoredImage(
+                p.image,
+                Modifier.fillMaxSize()
+                    .pointerInput(p.id) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(1f, 6f)
+                            offset = if (scale == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan
+                        }
+                    }
+                    .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            )
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "Fechar", tint = white) }
+                Text(if (list.size > 1) "${i + 1} de ${list.size}" else "", color = white, modifier = Modifier.weight(1f))
+                if (onEdit != null) IconButton(onClick = { onEdit(p) }) { Icon(Icons.Filled.Edit, "Editar", tint = white) }
+            }
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f))
+                    .navigationBarsPadding().padding(12.dp),
+            ) {
+                if (p.title.isNotBlank()) Text(p.title, color = white, style = MaterialTheme.typography.titleMedium)
+                if (p.text.isNotBlank()) Text(p.text, color = white)
+                if (list.size > 1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(enabled = i > 0, onClick = { i-- }) { Text("‹ Anterior", color = white) }
+                    TextButton(enabled = i < list.lastIndex, onClick = { i++ }) { Text("Próxima ›", color = white) }
+                }
+            }
+        }
     }
 }

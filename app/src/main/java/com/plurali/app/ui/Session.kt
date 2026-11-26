@@ -1,5 +1,7 @@
 package com.plurali.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -181,74 +184,114 @@ fun NewPasswordDialog(title: String, warning: String = "", onDismiss: () -> Unit
     )
 }
 
+/**
+ * Tela de entrada em duas etapas, para não confundir quem acabou de chegar:
+ *  1) início: Login do Sistema · Entrar sem login · Entrar com meu perfil
+ *  2) lista de perfis (só ao escolher "Entrar com meu perfil"), com aviso de mensagens novas.
+ */
 @Composable
 fun LoginScreen(d: AppData, onSafety: () -> Unit, onWelcome: () -> Unit) {
     var asking by remember { mutableStateOf<Who?>(null) }
     var forgot by remember { mutableStateOf(false) }
     var newPw by remember { mutableStateOf(false) }
     var showCode by remember { mutableStateOf<String?>(null) }
+    var step by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("home") }
+    var q by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val withPw = d.members.filter { !it.archived && it.password != null }.sortedBy { it.name.lowercase() }
     val noPw = d.members.count { !it.archived && it.password == null }
+    val unread = withPw.associate { it.id to d.unreadFor(it.id) }
+    val withNews = unread.count { it.value > 0 }
+    androidx.activity.compose.BackHandler(enabled = step != "home") { step = "home"; q = "" }
+
     Scaffold(containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground, contentWindowInsets = WindowInsets.safeDrawing) { pad ->
         com.plurali.app.ui.theme.ThemedBackground(Modifier.fillMaxSize())
         LazyColumn(
             Modifier.padding(pad).fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            item {
-                Spacer(Modifier.height(24.dp))
-                Text(d.systemName.ifBlank { "Plurali" }, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-                Text("Quem está usando?", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(12.dp))
-                if (d.welcome.isNotEmpty()) {
-                    Button(onClick = onWelcome, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Filled.WavingHand, null); Spacer(Modifier.width(8.dp)); Text("Chegou agora? Leia isto primeiro")
+            if (step == "home") {
+                item {
+                    Spacer(Modifier.height(24.dp))
+                    Text(d.systemName.ifBlank { "Plurali" }, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+                    Text("Como você quer entrar?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(12.dp))
+                    if (d.welcome.isNotEmpty()) {
+                        Button(onClick = onWelcome, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Filled.WavingHand, null); Spacer(Modifier.width(8.dp)); Text("Chegou agora? Leia isto primeiro")
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
-                    Spacer(Modifier.height(8.dp))
+                    FilledTonalButton(onClick = onSafety, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Filled.HealthAndSafety, null); Spacer(Modifier.width(8.dp)); Text("Preciso de ajuda · Plano de segurança")
+                    }
+                    Spacer(Modifier.height(10.dp))
                 }
-                FilledTonalButton(onClick = onSafety, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.HealthAndSafety, null); Spacer(Modifier.width(8.dp)); Text("Preciso de ajuda · Plano de segurança")
+                item {
+                    EntryOption(Icons.Filled.AdminPanelSettings, "Login do Sistema", "Administração: vê e edita tudo") { asking = Who.Admin }
                 }
-                Spacer(Modifier.height(8.dp))
-            }
-            item {
-                SpRow(0xFFD6AC5E, Modifier.fillMaxWidth(), onClick = { asking = Who.Admin }) {
-                    Icon(Icons.Filled.AdminPanelSettings, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(12.dp))
-                    NameAndPronouns("Sistema", "", Modifier.weight(1f), extra = "Administração: vê e edita tudo")
-                    Icon(Icons.Filled.Lock, null)
+                item {
+                    EntryOption(Icons.Filled.Visibility, "Entrar sem login", "Informações gerais, sem poder editar. Bom para quem acabou de chegar.") {
+                        Session.who = Who.Guest
+                    }
                 }
-            }
-            items(withPw, key = { it.id }) { m ->
-                SpRow(m.color, Modifier.fillMaxWidth(), onClick = { asking = Who.Member(m.id) }) {
-                    Avatar(m.name, m.color, m.avatar, 48.dp)
-                    Spacer(Modifier.width(12.dp))
-                    NameAndPronouns(m.name, m.pronouns, Modifier.weight(1f))
-                    Icon(Icons.Filled.Lock, null)
+                item {
+                    EntryOption(
+                        Icons.Filled.Person, "Entrar com meu perfil",
+                        if (withPw.isEmpty()) "Ninguém tem senha ainda. Entre como Sistema e crie a senha no perfil de cada um."
+                        else "Escolher quem é você na lista (${withPw.size} ${if (withPw.size == 1) "perfil" else "perfis"})",
+                        badge = withNews.takeIf { it > 0 }?.let { if (it == 1) "1 pessoa com mensagem nova" else "$it pessoas com mensagens novas" },
+                        enabled = withPw.isNotEmpty(),
+                    ) { step = "profiles" }
                 }
-            }
-            if (noPw > 0) item {
-                Text(
-                    "$noPw membro(s) ainda sem senha. Entre como Sistema e crie a senha no perfil de cada um.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp),
-                )
-            }
-            item {
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = { Session.who = Who.Guest }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.Visibility, null); Spacer(Modifier.width(8.dp)); Text("Entrar sem login (informações gerais)")
+                item {
+                    if (d.adminRecovery != null) TextButton(onClick = { forgot = true }) { Text("Esqueci a senha do sistema") }
                 }
-                Text(
-                    "Para quem acabou de chegar: mostra os membros, o mural, o calendário e os dados gerais do corpo, sem poder editar. " +
-                        "Lá dentro tem também “Sou novo aqui”, para se apresentar ao sistema.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp),
-                )
-                if (d.adminRecovery != null) TextButton(onClick = { forgot = true }) { Text("Esqueci a senha do sistema") }
+            } else {
+                item {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { step = "home"; q = "" }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
+                        Text("Quem é você?", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    }
+                    if (withPw.size > 6) OutlinedTextField(
+                        q, { q = it }, placeholder = { Text("Buscar nome") }, singleLine = true,
+                        leadingIcon = { Icon(Icons.Filled.Search, null) }, modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                val list = withPw.filter { q.isBlank() || it.name.contains(q, ignoreCase = true) }
+                items(list, key = { it.id }) { m ->
+                    val n = unread[m.id] ?: 0
+                    SpRow(m.color, Modifier.fillMaxWidth(), onClick = { asking = Who.Member(m.id) }) {
+                        Box {
+                            Avatar(m.name, m.color, m.avatar, 48.dp)
+                            if (n > 0) Box(
+                                Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp).size(16.dp)
+                                    .background(MaterialTheme.colorScheme.error, androidx.compose.foundation.shape.CircleShape)
+                                    .border(2.dp, MaterialTheme.colorScheme.surfaceContainer, androidx.compose.foundation.shape.CircleShape),
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        NameAndPronouns(m.name, m.pronouns, Modifier.weight(1f), extra = if (n > 0) (if (n == 1) "1 mensagem nova" else "$n mensagens novas") else "")
+                        if (n > 0) Text(
+                            if (n > 99) "99+" else "$n",
+                            color = MaterialTheme.colorScheme.onError, style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.background(MaterialTheme.colorScheme.error, androidx.compose.foundation.shape.RoundedCornerShape(50))
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.Filled.Lock, null)
+                    }
+                }
+                if (list.isEmpty()) item { Text("Ninguém encontrado.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (noPw > 0) item {
+                    Text(
+                        "$noPw membro(s) ainda sem senha. Entre como Sistema e crie a senha no perfil de cada um.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp),
+                    )
+                }
             }
         }
     }
@@ -277,5 +320,42 @@ fun LoginScreen(d: AppData, onSafety: () -> Unit, onWelcome: () -> Unit) {
             check = { Crypto.verify(it, secret) },
             onDismiss = { asking = null },
         ) { Session.who = w; asking = null }
+    }
+}
+
+/** Opção grande da tela de entrada. */
+@Composable
+private fun EntryOption(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    sub: String,
+    badge: String? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().themed()
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(48.dp).background(
+                if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                MaterialTheme.shapes.medium,
+            ),
+            contentAlignment = Alignment.Center,
+        ) { Icon(icon, null, tint = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (badge != null) Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).background(MaterialTheme.colorScheme.error, androidx.compose.foundation.shape.CircleShape))
+                Spacer(Modifier.width(6.dp))
+                Text(badge, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+            }
+        }
+        if (enabled) Icon(Icons.Filled.ChevronRight, null)
     }
 }
