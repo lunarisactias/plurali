@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plurali.shared.*
+import com.plurali.app.ui.theme.themedCard
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -41,12 +42,13 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-private val PGold = Color(0xFFD6AC5E)
-private val PBg = Color(0xFF1D2228)
-private val PCard = Color(0xFF232732)
-private val PField = Color(0xFF2B2E35)
-private val PMuted = Color(0xFFA0A3AB)
-private val PPron = Color(0xFF7C84A6)
+// cores do tema em uso (o mesmo do Plurali, seguindo quem está no front)
+private val PGold: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val PBg: Color @Composable get() = MaterialTheme.colorScheme.background
+private val PCard: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainer
+private val PField: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainerHigh
+private val PMuted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+private val PPron: Color @Composable get() = MaterialTheme.colorScheme.tertiary
 private val PGreen = Color(0xFF66BB6A)
 private val pt = Locale("pt", "BR")
 
@@ -97,7 +99,8 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
     val upcoming = (0..60L).flatMap { i -> val d = today.plusDays(i); events.filter { it.occursOn(d) }.map { d to it } }.take(6)
 
     Scaffold(
-        containerColor = PBg,
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
@@ -107,10 +110,13 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = PCard),
+                colors = com.plurali.app.LocalExtra.current.let { ex ->
+                    TopAppBarDefaults.topAppBarColors(containerColor = ex.topBar, titleContentColor = ex.barContent, navigationIconContentColor = ex.barContent)
+                },
             )
         },
     ) { pad ->
+        com.plurali.app.ui.theme.ThemedBackground(Modifier.fillMaxSize())
         LazyColumn(Modifier.padding(pad).fillMaxSize(), state = remember(p.id) { LazyListState() }, contentPadding = PaddingValues(bottom = 24.dp)) {
             // ---------- cabeçalho: capa + foto + nome ----------
             item {
@@ -273,10 +279,12 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
 @Composable
 private fun BigAvatar(name: String, color: Long, b64: String?, size: Dp) {
     val bmp = remember(b64) { b64Image(b64) }
-    Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.2f)).background(Color(color)), contentAlignment = Alignment.Center) {
+    val ui = com.plurali.app.ui.theme.LocalUi.current
+    val ears = ui.avatarId == "cat" || ui.avatarId == "bunny"
+    Box(Modifier.size(size).clip(ui.avatarShape).background(Color(color)), contentAlignment = Alignment.Center) {
         if (bmp != null) Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Text(name.take(1).uppercase(), color = if (Color(color).luminance() > 0.5f) Color.Black else Color.White,
-            fontWeight = FontWeight.Bold, fontSize = (size.value * 0.42f).sp)
+            fontWeight = FontWeight.Bold, fontSize = (size.value * (if (ears) 0.34f else 0.42f)).sp, modifier = if (ears) Modifier.padding(top = size * 0.24f) else Modifier)
     }
 }
 
@@ -307,12 +315,13 @@ private fun LabeledText(icon: ImageVector, label: String, text: String, tint: Co
 /** Cartão de seção com faixa da cor do membro (estilo do perfil no Plurali). */
 @Composable
 private fun Section(icon: ImageVector, title: String, color: Color, highlight: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    val ui = com.plurali.app.ui.theme.LocalUi.current
     Row(
-        Modifier.padding(horizontal = 12.dp, vertical = 5.dp).fillMaxWidth().height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(14.dp)).background(if (highlight) color.copy(alpha = 0.16f) else PCard),
+        Modifier.padding(horizontal = 12.dp, vertical = 5.dp).fillMaxWidth()
+            .themedCard(ui, if (highlight) androidx.compose.ui.graphics.lerp(PCard, color, 0.16f) else PCard, color, MaterialTheme.colorScheme.outline, MaterialTheme.colorScheme.onSurface)
+            .padding(top = ui.cardTopExtra, bottom = ui.cardBottomExtra),
     ) {
-        Box(Modifier.width(4.dp).fillMaxHeight().background(color))
-        Column(Modifier.padding(14.dp).fillMaxWidth()) {
+        Column(Modifier.padding(start = 14.dp + (if (ui.strip == com.plurali.app.ui.theme.Strip.LEFT) 4.dp else 0.dp), end = 14.dp, top = 14.dp + (if (ui.strip == com.plurali.app.ui.theme.Strip.SPOTS) 8.dp else 0.dp), bottom = 14.dp).fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, Modifier.size(18.dp), tint = PGold)
                 Spacer(Modifier.width(8.dp))

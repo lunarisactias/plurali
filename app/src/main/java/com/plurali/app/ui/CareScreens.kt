@@ -294,6 +294,10 @@ fun WelcomeCards(
     }
 }
 
+/** O que tocar ao ouvir este item: a voz gravada, se houver; senão o título + texto em leitura automática. */
+private fun WelcomeCard.speechPart(): Narrator.Part? =
+    Narrator.part(voice, listOf(title, Rich.strip(text)).filter { it.isNotBlank() }.joinToString(". "))
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun WelcomeTile(w: WelcomeCard, n: Int, total: Int, modifier: Modifier, onClick: () -> Unit, onLongClick: (() -> Unit)?) {
@@ -314,7 +318,23 @@ private fun WelcomeTile(w: WelcomeCard, n: Int, total: Int, modifier: Modifier, 
         }
         val ta = when (w.align) { "center" -> TextAlign.Center; "end" -> TextAlign.End; else -> TextAlign.Start }
         if (w.title.isNotBlank() || w.text.isNotBlank() || w.image == null) Column(Modifier.fillMaxWidth().padding(if (small) 10.dp else 16.dp)) {
-            if (total > 1) Text("$n de $total", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = ta, modifier = Modifier.fillMaxWidth())
+            // número do cartão + botão para ouvir o texto em voz alta
+            val ctx = LocalContext.current
+            val speaking = Narrator.playingId == w.id
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (total > 1) "$n de $total" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = ta, modifier = Modifier.weight(1f))
+                // com voz gravada toca a gravação; sem ela, lê o texto automaticamente
+                if (w.voice != null || w.title.isNotBlank() || w.text.isNotBlank()) FilledTonalIconButton(
+                    onClick = { Narrator.toggle(ctx, w.id, listOf(w.speechPart())) },
+                    modifier = Modifier.size(34.dp),
+                ) {
+                    Icon(
+                        if (speaking) Icons.Filled.Stop else if (w.voice != null) Icons.Filled.RecordVoiceOver else Icons.Filled.VolumeUp,
+                        if (speaking) "Parar" else if (w.voice != null) "Ouvir a voz gravada" else "Ouvir", Modifier.size(18.dp),
+                    )
+                }
+            }
             if (w.title.isNotBlank()) Text(w.title, style = if (small) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge, textAlign = ta, modifier = Modifier.fillMaxWidth())
             if (w.text.isNotBlank()) RichText(
                 w.text, style = if (small) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyLarge,
@@ -343,6 +363,18 @@ fun WelcomeScreen(nav: NavHostController?, onClose: (() -> Unit)?) {
         }
     }
     fun pickPhoto() = pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+    // gravar a própria voz lendo o item (fica mais natural que a leitura automática)
+    var recording by remember { mutableStateOf(false) }
+    fun startRec() { Narrator.stop(); AudioPlay.stop(); if (AudioRec.start(ctx)) recording = true }
+    val micPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) startRec()
+    }
+    fun recordVoice() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) startRec()
+        else micPerm.launch(android.Manifest.permission.RECORD_AUDIO)
+    }
+    DisposableEffect(Unit) { onDispose { if (AudioRec.active) AudioRec.cancel() } }
+    LaunchedEffect(edit == null) { if (edit == null && recording) { AudioRec.cancel(); recording = false } }
 
     ScreenScaffold(
         "Boas-vindas",
@@ -360,6 +392,14 @@ fun WelcomeScreen(nav: NavHostController?, onClose: (() -> Unit)?) {
                     "Cada item pode ter texto e/ou foto (planta da casa, família, pets…) e um tamanho. Toque para editar; nas fotos, toque para ver maior e segure para editar.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (d.welcome.any { it.voice != null || it.title.isNotBlank() || it.text.isNotBlank() }) {
+                val speakingAll = Narrator.playingId == "welcome-all"
+                FilledTonalButton(onClick = { Narrator.toggle(ctx, "welcome-all", d.welcome.map { it.speechPart() }) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(if (speakingAll) Icons.Filled.Stop else Icons.Filled.VolumeUp, null); Spacer(Modifier.width(8.dp))
+                    Text(if (speakingAll) "Parar a leitura" else "Ouvir tudo em voz alta")
+                }
+            }
+            DisposableEffect(Unit) { onDispose { Narrator.stop() } }
             if (d.welcome.isEmpty()) {
                 EmptyHint(if (canEdit) "Nenhum item ainda." else "O sistema ainda não escreveu as boas-vindas.")
                 if (canEdit) Button(onClick = { Store.setWelcome(SUGGESTED_WELCOME.map { it.copy(id = newId()) }) }) {
@@ -394,6 +434,32 @@ fun WelcomeScreen(nav: NavHostController?, onClose: (() -> Unit)?) {
                     }
                     OutlinedTextField(w.title, { edit = w.copy(title = it) }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
                     RichTextField(w.text, { edit = w.copy(text = it) }, if (w.image != null) "Legenda / texto" else "Texto", Modifier.fillMaxWidth())
+                    // voz gravada: toca no lugar da leitura automática
+                    Text("Voz", style = MaterialTheme.typography.labelLarge)
+                    when {
+                        recording -> Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(12.dp)) {
+                            RecordingBar(
+                                onCancel = { AudioRec.cancel(); recording = false },
+                                onSend = { recording = false; AudioRec.stop()?.let { (p, ms) -> edit = edit?.copy(voice = p, voiceMs = ms) } },
+                            )
+                        }
+                        w.voice != null -> {
+                            Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(12.dp)) {
+                                Box(Modifier.padding(horizontal = 10.dp)) { AudioBubble(w.voice, w.voiceMs) }
+                            }
+                            Row {
+                                TextButton(onClick = { recordVoice() }) { Icon(Icons.Filled.Mic, null); Spacer(Modifier.width(4.dp)); Text("Regravar") }
+                                TextButton(onClick = { AudioPlay.stop(); edit = w.copy(voice = null, voiceMs = 0) }) { Text("Tirar voz", color = MaterialTheme.colorScheme.error) }
+                            }
+                        }
+                        else -> OutlinedButton(onClick = { recordVoice() }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Filled.Mic, null); Spacer(Modifier.width(8.dp)); Text("Gravar minha voz lendo (opcional)")
+                        }
+                    }
+                    Text(
+                        if (w.voice != null) "O botão de ouvir toca esta gravação." else "Sem gravação, o botão de ouvir lê o texto com a voz automática do celular.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Text("Alinhamento", style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(Triple("start", "Esquerda", Icons.Filled.FormatAlignLeft), Triple("center", "Centro", Icons.Filled.FormatAlignCenter), Triple("end", "Direita", Icons.Filled.FormatAlignRight)).forEach { (k, l, ic) ->
@@ -437,7 +503,7 @@ fun WelcomeScreen(nav: NavHostController?, onClose: (() -> Unit)?) {
                 }
             },
             confirmButton = {
-                TextButton(enabled = w.title.isNotBlank() || w.text.isNotBlank() || w.image != null, onClick = { Store.upsertWelcome(w); edit = null }) { Text("Salvar") }
+                TextButton(enabled = !recording && (w.title.isNotBlank() || w.text.isNotBlank() || w.image != null || w.voice != null), onClick = { Store.upsertWelcome(w); edit = null }) { Text("Salvar") }
             },
             dismissButton = {
                 Row {

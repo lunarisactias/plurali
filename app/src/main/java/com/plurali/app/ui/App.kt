@@ -29,12 +29,16 @@ private data class DrawerItem(
 
 private val drawerItems = listOf(
     DrawerItem("home", "Início", Icons.Filled.Home, guest = true),
+    DrawerItem("missed", "O que eu perdi?", Icons.Filled.History),
     DrawerItem("welcome", "Boas-vindas", Icons.Filled.WavingHand, guest = true),
     DrawerItem("newcomer", "Sou novo aqui", Icons.Filled.EmojiPeople, guest = true, guestOnly = true),
     DrawerItem("search", "Buscar", Icons.Filled.Search),
     DrawerItem("chats", "Conversas", Icons.Filled.Forum),
     DrawerItem("calendar", "Calendário", Icons.Filled.CalendarMonth, guest = true),
     DrawerItem("reminders", "Lembretes e timers", Icons.Filled.Alarm),
+    DrawerItem("meds", "Remédios", Icons.Filled.Medication),
+    DrawerItem("tasks", "Tarefas", Icons.Filled.TaskAlt),
+    DrawerItem("diary", "Diário", Icons.Filled.MenuBook),
     DrawerItem("body", "Corpo", Icons.Filled.Accessibility, guest = true),
     DrawerItem("map", "Mapa do sistema", Icons.Filled.Hub, guest = true),
     DrawerItem("safety", "Plano de segurança", Icons.Filled.HealthAndSafety, guest = true),
@@ -85,6 +89,20 @@ private fun MainApp(d: AppData, who: Who) {
     val route = entry?.destination?.route
     val me = who.meId
     val unread = if (who is Who.Open) 0 else d.chats.filter { who.canSeeChat(it) }.sumOf { d.unreadIn(it, me) }
+    // ao entrar com um perfil: mostra "O que eu perdi?" se houver novidade desde a última vez
+    LaunchedEffect(who) {
+        if (who is Who.Member) {
+            val now = System.currentTimeMillis()
+            val since = d.lastSeen[who.id] ?: d.fronts.filter { it.subjectId == who.id && it.end != null }.maxOfOrNull { it.end!! }
+            Session.missedSince = since
+            Store.setLastSeen(who.id, now)
+            if (since != null && Session.pendingRoute == null && d.hasNewsFor(who.id, since)) runCatching { nav.go("missed") }
+        }
+    }
+    // ao sair do perfil (trocar de usuário), marca até onde a pessoa já viu
+    DisposableEffect(who) {
+        onDispose { (who as? Who.Member)?.let { Store.setLastSeen(it.id, System.currentTimeMillis()) } }
+    }
     LaunchedEffect(Session.pendingRoute) {
         Session.pendingRoute?.let { r ->
             Session.pendingRoute = null
@@ -95,6 +113,7 @@ private fun MainApp(d: AppData, who: Who) {
         .filter { !it.guestOnly || who is Who.Guest }
         .filter { it.route != "backup" || who.isAdmin }
         .filter { it.route != "chats" || who !is Who.Admin }
+        .filter { it.route != "missed" || who is Who.Member }
     val topLevel = drawerItems.any { it.route == route }
 
     ModalNavigationDrawer(
@@ -156,6 +175,10 @@ private fun MainApp(d: AppData, who: Who) {
         CompositionLocalProvider(LocalOpenDrawer provides { scope.launch { drawer.open() } }) {
             NavHost(nav, startDestination = "home") {
                 composable("home") { HomeScreen(nav) }
+                composable("missed") { MissedScreen(nav) }
+                composable("meds") { MedsScreen(nav) }
+                composable("tasks") { TasksScreen(nav) }
+                composable("diary") { DiaryScreen(nav) }
                 composable("chats") { ChatsScreen(nav) }
                 composable("chat/{id}") { ChatScreen(nav, it.arguments?.getString("id") ?: "") }
                 composable("chatNew") { NewChatScreen(nav) }

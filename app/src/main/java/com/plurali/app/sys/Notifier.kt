@@ -50,9 +50,10 @@ object Notifier {
         return PendingIntent.getActivity(ctx, req, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
-    fun post(ctx: Context, id: Int, channel: String, title: String, text: String, route: String? = null) {
+    fun post(ctx: Context, id: Int, channel: String, title: String, text: String, route: String? = null, actions: List<Pair<String, PendingIntent>> = emptyList()) {
         if (!canPost(ctx)) return
         val n = NotificationCompat.Builder(ctx, channel)
+            .apply { actions.forEach { (label, pi) -> addAction(0, label, pi) } }
             .setSmallIcon(R.drawable.ic_stat_plurali)
             .setContentTitle(title)
             .setContentText(text)

@@ -93,6 +93,8 @@ data class Snapshot(
     val safety: SnapSafety? = null,
     val body: List<SnapBody>? = null,
     val history: List<SnapHistory>? = null,
+    val canMessage: Boolean = false,   // o companion pode mandar recados para o sistema
+    val appearance: String? = null,    // tema de quem está no front (JSON da aparência), para o companion seguir
 ) {
     /** Chave usada para perceber que o front mudou. */
     fun frontKey(): String = front?.map { it.name }?.sorted()?.joinToString("|") ?: ""
@@ -143,6 +145,8 @@ data class Snapshot(
         body?.let { l ->
             o.put("body", JSONArray(l.map { JSONObject().put("section", it.section).put("label", it.label).put("value", it.value) }))
         }
+        o.put("canMessage", canMessage)
+        appearance?.let { o.put("appearance", it) }
         history?.let { l ->
             o.put("history", JSONArray(l.map { h ->
                 JSONObject().put("name", h.name).put("color", h.color).put("start", h.start).put("end", h.end ?: JSONObject.NULL).put("personId", h.personId ?: JSONObject.NULL)
@@ -194,7 +198,28 @@ data class Snapshot(
                 },
                 body = o.list("body") { SnapBody(it.s("section"), it.s("label"), it.s("value")) },
                 history = o.list("history") { SnapHistory(it.s("name"), it.optLong("color"), it.optLong("start"), it.lN("end"), it.sN("personId")) },
+                canMessage = o.optBoolean("canMessage"),
+                appearance = o.sN("appearance"),
             )
         }
     }
+}
+
+/**
+ * Recados do companion para o sistema. Ficam num caminho próprio do companion
+ * (shares/in-<hash>-<n>, dono = o companion), criptografados com a mesma chave do convite.
+ * n = 0, 1, 2…: se o companion reinstalar o app (outra conta anônima), usa o próximo número.
+ */
+object Inbox {
+    const val SLOTS = 4
+    fun path(shareId: String, key: String, slot: Int) =
+        "shares/in-" + ShareCrypto.sha256("plurali-inbox|$shareId|$key").take(32) + "-" + slot
+
+    data class Msg(val id: String, val text: String, val time: Long)
+
+    fun encode(l: List<Msg>): String = org.json.JSONArray(l.map { org.json.JSONObject().put("id", it.id).put("text", it.text).put("time", it.time) }).toString()
+    fun decode(s: String): List<Msg> = runCatching {
+        val a = org.json.JSONArray(s)
+        (0 until a.length()).map { a.getJSONObject(it) }.map { Msg(it.getString("id"), it.optString("text"), it.optLong("time")) }
+    }.getOrDefault(emptyList())
 }

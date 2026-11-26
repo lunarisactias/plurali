@@ -57,6 +57,8 @@ object Session {
     var who by mutableStateOf<Who?>(null)
     var stoppedAt = 0L
     const val LOCK_AFTER_MS = 5 * 60_000L
+    /** Desde quando mostrar "O que eu perdi?" para quem acabou de entrar. */
+    var missedSince by mutableStateOf<Long?>(null)
     /** Tela a abrir depois do login (vinda de uma notificação). */
     var pendingRoute by mutableStateOf<String?>(null)
 }
@@ -205,7 +207,7 @@ fun LoginScreen(d: AppData, onSafety: () -> Unit, onWelcome: () -> Unit) {
     androidx.activity.compose.BackHandler(enabled = step != "home") { step = "home"; q = "" }
 
     Scaffold(containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground, contentWindowInsets = WindowInsets.safeDrawing) { pad ->
-        com.plurali.app.ui.theme.ThemedBackground(Modifier.fillMaxSize())
+        com.plurali.app.ui.theme.AppBackground(Modifier.fillMaxSize())
         LazyColumn(
             Modifier.padding(pad).fillMaxSize(),
             contentPadding = PaddingValues(16.dp),

@@ -75,13 +75,14 @@ object Json {
             JSONObject().put("id", m.id).put("chatId", m.chatId).putN("authorId", m.authorId)
                 .put("text", m.text).put("time", m.time).putN("editedAt", m.editedAt)
                 .putN("image", m.image).put("reactions", m.reactions.jo()).put("pinned", m.pinned)
+                .putN("audio", m.audio).put("audioMs", m.audioMs)
         })
         .put("notices", d.notices.ja { n ->
             JSONObject().put("id", n.id).putN("authorId", n.authorId).put("title", n.title).put("text", n.text)
                 .put("time", n.time).put("pinned", n.pinned).put("color", n.color)
         })
         .put("welcome", d.welcome.ja { w ->
-            JSONObject().put("id", w.id).put("title", w.title).put("text", w.text).put("color", w.color).putN("image", w.image).put("size", w.size).put("align", w.align)
+            JSONObject().put("id", w.id).put("title", w.title).put("text", w.text).put("color", w.color).putN("image", w.image).put("size", w.size).put("align", w.align).putN("voice", w.voice).put("voiceMs", w.voiceMs)
         })
         .put("notes", d.notes.ja { n ->
             JSONObject().put("id", n.id).put("memberId", n.memberId).put("title", n.title)
@@ -113,6 +114,7 @@ object Json {
             val p = c.perms
             JSONObject().put("id", c.id).put("name", c.name).put("about", c.about).put("shareId", c.shareId).put("key", c.key).put("createdAt", c.createdAt)
                 .put("perms", JSONObject()
+                    .put("messages", p.messages)
                     .put("front", p.front).put("frontStatus", p.frontStatus).put("customFronts", p.customFronts)
                     .put("notices", p.notices).put("calendar", p.calendar).put("people", p.people)
                     .put("memberIds", p.memberIds?.ja { it } ?: JSONObject.NULL)
@@ -124,6 +126,29 @@ object Json {
         })
         .put("cloudBackup", d.cloudBackup?.let { JSONObject().put("code", it.code).put("enabled", it.enabled).put("freq", it.freq).put("wifiOnly", it.wifiOnly) } ?: JSONObject.NULL)
         .put("appearance", JSONObject().also { ap -> d.appearance.forEach { (k, a) -> ap.put(k, encodeAppearance(a)) } })
+        .put("frontNotes", d.frontNotes.ja { n ->
+            JSONObject().put("id", n.id).putN("authorId", n.authorId).put("text", n.text).put("createdAt", n.createdAt)
+                .putN("targetId", n.targetId).putN("doneById", n.doneById).putN("doneAt", n.doneAt)
+        })
+        .put("meds", d.meds.ja { m ->
+            JSONObject().put("id", m.id).put("name", m.name).put("dose", m.dose).put("times", m.times.ja { it })
+                .put("days", m.days.toList().ja { it }).put("notes", m.notes).put("active", m.active).put("color", m.color)
+        })
+        .put("medTakes", d.medTakes.ja { t ->
+            JSONObject().put("id", t.id).put("medId", t.medId).put("slot", t.slot).put("takenAt", t.takenAt)
+                .putN("byId", t.byId).put("byName", t.byName).put("skipped", t.skipped)
+        })
+        .put("tasks", d.tasks.ja { t ->
+            JSONObject().put("id", t.id).put("title", t.title).put("notes", t.notes).putN("assigneeId", t.assigneeId).putN("due", t.due)
+                .put("repeat", t.repeat).putN("doneAt", t.doneAt).putN("doneById", t.doneById).put("createdAt", t.createdAt).putN("createdById", t.createdById)
+        })
+        .put("diary", d.diary.ja { e ->
+            JSONObject().put("id", e.id).putN("authorId", e.authorId).put("time", e.time).put("text", e.text).put("images", e.images.ja { it })
+        })
+        .put("companionMessages", d.companionMessages.ja { m ->
+            JSONObject().put("id", m.id).put("companionId", m.companionId).put("text", m.text).put("time", m.time).put("read", m.read)
+        })
+        .put("lastSeen", d.lastSeen.jo())
 
     private fun encodeMember(m: Member): JSONObject =
         JSONObject().put("id", m.id).put("name", m.name).put("pronouns", m.pronouns)
@@ -164,6 +189,7 @@ object Json {
             ChatMessage(
                 it.s("id"), it.s("chatId"), it.sN("authorId"), it.s("text"), it.optLong("time"), it.lN("editedAt"),
                 image = it.sN("image"), reactions = it.smap("reactions"), pinned = it.optBoolean("pinned"),
+                audio = it.sN("audio"), audioMs = it.optLong("audioMs"),
             )
         }
         // migração: quadro de mensagens antigo (versão 1) -> conversas diretas
@@ -227,7 +253,7 @@ object Json {
                 Notice(it.s("id"), it.sN("authorId"), it.s("title"), it.s("text"), it.optLong("time"), it.optBoolean("pinned"), it.optLong("color", 0xFFD6AC5E))
             },
             welcome = o.arr("welcome") {
-                WelcomeCard(it.s("id"), it.s("title"), it.s("text"), it.optLong("color", 0xFFD6AC5E), it.sN("image"), it.optInt("size", 6).takeIf { s -> s in listOf(2, 3, 4, 6) } ?: 6, it.s("align").ifBlank { "start" })
+                WelcomeCard(it.s("id"), it.s("title"), it.s("text"), it.optLong("color", 0xFFD6AC5E), it.sN("image"), it.optInt("size", 6).takeIf { s -> s in listOf(2, 3, 4, 6) } ?: 6, it.s("align").ifBlank { "start" }, it.sN("voice"), it.optLong("voiceMs", 0))
             },
             notes = o.arr("notes") { Note(it.s("id"), it.s("memberId"), it.s("title"), it.s("body"), it.optLong("time")) },
             polls = o.arr("polls") { p ->
@@ -255,6 +281,7 @@ object Json {
                 CompanionProfile(
                     id = c.s("id"), name = c.s("name"), about = c.s("about"), shareId = c.s("shareId"), key = c.s("key"),
                     perms = CompanionPerms(
+                        messages = p.optBoolean("messages", d.messages),
                         front = p.optBoolean("front", d.front), frontStatus = p.optBoolean("frontStatus", d.frontStatus),
                         customFronts = p.optBoolean("customFronts", d.customFronts), notices = p.optBoolean("notices", d.notices),
                         calendar = p.optBoolean("calendar", d.calendar), people = p.optBoolean("people", d.people),
@@ -276,33 +303,25 @@ object Json {
                 CloudBackup(it.s("code"), it.optBoolean("enabled", true), it.s("freq").ifBlank { "6h" }, it.optBoolean("wifiOnly", true))
             }?.takeIf { it.code.isNotBlank() },
             appearance = o.optJSONObject("appearance")?.let { ap -> ap.keys().asSequence().associateWith { decodeAppearance(ap.getJSONObject(it)) } } ?: emptyMap(),
+            frontNotes = o.arr("frontNotes") { FrontNote(it.s("id"), it.sN("authorId"), it.s("text"), it.optLong("createdAt"), it.sN("targetId"), it.sN("doneById"), it.lN("doneAt")) },
+            meds = o.arr("meds") {
+                Medication(it.s("id"), it.s("name"), it.s("dose"), it.optJSONArray("times")?.let { a -> (0 until a.length()).map { i -> a.getInt(i) } } ?: listOf(480),
+                    it.optJSONArray("days")?.let { a -> (0 until a.length()).map { i -> a.getInt(i) }.toSet() } ?: (1..7).toSet(),
+                    it.s("notes"), it.optBoolean("active", true), it.optLong("color", 0xFF4DB6AC))
+            },
+            medTakes = o.arr("medTakes") { MedTake(it.s("id"), it.s("medId"), it.optLong("slot"), it.optLong("takenAt"), it.sN("byId"), it.s("byName"), it.optBoolean("skipped")) },
+            tasks = o.arr("tasks") {
+                TaskItem(it.s("id"), it.s("title"), it.s("notes"), it.sN("assigneeId"), it.lN("due"), it.s("repeat").ifBlank { "none" },
+                    it.lN("doneAt"), it.sN("doneById"), it.optLong("createdAt"), it.sN("createdById"))
+            },
+            diary = o.arr("diary") { DiaryEntry(it.s("id"), it.sN("authorId"), it.optLong("time"), it.s("text"), it.strs("images")) },
+            companionMessages = o.arr("companionMessages") { CompanionMessage(it.s("id"), it.s("companionId"), it.s("text"), it.optLong("time"), it.optBoolean("read")) },
+            lastSeen = o.lmap("lastSeen"),
         )
     }
 
-    fun encodeAppearance(a: Appearance): JSONObject = JSONObject().put("theme", a.theme).put("mode", a.mode).putN("accent", a.accent)
-        .put("textScale", a.textScale.toDouble()).put("titleFont", a.titleFont).put("bodyFont", a.bodyFont).put("cardShape", a.cardShape)
-        .put("avatarShape", a.avatarShape).put("strip", a.strip).put("border", a.border).put("decor", a.decor).put("headerMarks", a.headerMarks)
-        .put("pattern", a.pattern.toDouble()).put("animate", a.animate).putN("wallpaper", a.wallpaper)
-        .put("wallpaperDim", a.wallpaperDim.toDouble()).put("followFront", a.followFront)
-        .putN("bg", a.bg).putN("bg2", a.bg2).putN("card", a.card).putN("bars", a.bars).putN("text", a.text)
-        .putN("pronoun", a.pronoun).putN("chip", a.chip).putN("patternColor", a.patternColor).put("memberTint", a.memberTint.toDouble())
-
-    fun decodeAppearance(o: JSONObject): Appearance {
-        val d = Appearance()
-        return Appearance(
-            theme = o.s("theme").ifBlank { d.theme }, mode = o.s("mode").ifBlank { d.mode }, accent = o.lN("accent"),
-            textScale = o.optDouble("textScale", 1.0).toFloat(), titleFont = o.s("titleFont").ifBlank { d.titleFont },
-            bodyFont = o.s("bodyFont").ifBlank { d.bodyFont }, cardShape = o.s("cardShape").ifBlank { d.cardShape },
-            avatarShape = o.s("avatarShape").ifBlank { d.avatarShape }, strip = o.s("strip").ifBlank { d.strip },
-            border = o.s("border").ifBlank { d.border }, decor = o.optBoolean("decor", true), headerMarks = o.optBoolean("headerMarks", true),
-            pattern = o.optDouble("pattern", 1.0).toFloat(),
-            animate = o.optBoolean("animate"), wallpaper = o.sN("wallpaper"), wallpaperDim = o.optDouble("wallpaperDim", 0.55).toFloat(),
-            followFront = o.optBoolean("followFront"),
-            bg = o.lN("bg"), bg2 = o.lN("bg2"), card = o.lN("card"), bars = o.lN("bars"), text = o.lN("text"),
-            pronoun = o.lN("pronoun"), chip = o.lN("chip"), patternColor = o.lN("patternColor"),
-            memberTint = o.optDouble("memberTint", 0.0).toFloat(),
-        )
-    }
+    fun encodeAppearance(a: Appearance): JSONObject = AppearanceJson.encode(a)
+    fun decodeAppearance(o: JSONObject): Appearance = AppearanceJson.decode(o)
 
     // ---- dados sensíveis (lista de BodyEntry) ----
     fun encodeEntries(l: List<BodyEntry>): String = l.ja { b ->

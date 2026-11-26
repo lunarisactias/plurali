@@ -271,7 +271,7 @@ fun ScreenScaffold(
 ) {
     val openDrawer = LocalOpenDrawer.current
     Box(Modifier.fillMaxSize()) {
-    com.plurali.app.ui.theme.ThemedBackground(Modifier.matchParentSize())
+    com.plurali.app.ui.theme.AppBackground(Modifier.matchParentSize())
     Scaffold(
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,

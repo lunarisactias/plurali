@@ -153,6 +153,7 @@ fun FrontersTab(nav: NavHostController) {
                 }
             }
             item(key = "notices") { NoticeBoard(d, now) }
+            item(key = "frontnotes") { FrontNotesBlock(d, LocalWho.current) }
             if (current.isEmpty()) item {
                 EmptyHint(if (who.canWrite) "Ninguém no front. Vá na aba Membros (ou Custom fronts) e toque em ↑." else "Ninguém registrado no front agora.")
             }

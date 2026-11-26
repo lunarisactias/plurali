@@ -65,6 +65,16 @@ object Effects {
                 )
             }
         }
+        // recados deixados para quem acabou de entrar no front
+        if (prev != null) (cur - prev).forEach { id ->
+            val m = d.members.find { it.id == id } ?: return@forEach
+            val notes = d.frontNotes.filter { it.doneAt == null && (it.targetId == id || (it.targetId == null && it.authorId != id)) }
+            if (notes.isNotEmpty()) Notifier.post(
+                ctx, ("note:" + id).hashCode(), Notifier.CH_MSG,
+                if (notes.size == 1) "Recado para ${m.name}" else "${notes.size} recados para ${m.name}",
+                notes.first().text, "home",
+            )
+        }
         Notifier.front(ctx, d)
         FrontWidget.refresh(ctx)
         PhotoWidgets.refresh(ctx)

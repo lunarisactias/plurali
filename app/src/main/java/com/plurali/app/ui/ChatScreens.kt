@@ -187,6 +187,11 @@ fun ChatScreen(nav: NavHostController, id: String) {
             attached = withContext(Dispatchers.IO) { saveImage(ctx, uri, "chat", id.take(8), aspect = null, maxSide = 1280) }
         }
     }
+    var recording by remember { mutableStateOf(false) }
+    val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok && AudioRec.start(ctx)) recording = true
+    }
+    DisposableEffect(Unit) { onDispose { if (AudioRec.active) AudioRec.cancel(); AudioPlay.stop() } }
     val actor = me ?: writer
     val pins = msgs.filter { it.pinned }
     val list = rememberLazyListState()
@@ -244,6 +249,7 @@ fun ChatScreen(nav: NavHostController, id: String) {
                                     m.image, Modifier.padding(vertical = 4.dp).sizeIn(maxWidth = 260.dp, maxHeight = 260.dp).clip(RoundedCornerShape(10.dp)),
                                     contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                                 )
+                                if (m.audio != null) AudioBubble(m.audio, m.audioMs)
                                 if (m.text.isNotBlank()) Text(m.text)
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
@@ -299,7 +305,10 @@ fun ChatScreen(nav: NavHostController, id: String) {
                         TextButton(onClick = { attached = null }) { Text("Tirar foto") }
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (recording) RecordingBar(
+                    onCancel = { AudioRec.cancel(); recording = false },
+                    onSend = { AudioRec.stop()?.let { (p, ms) -> Store.sendChatMessage(id, writer, "", audio = p, audioMs = ms) }; recording = false },
+                ) else Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                         Icon(Icons.Filled.AddPhotoAlternate, "Enviar foto")
                     }
@@ -308,7 +317,14 @@ fun ChatScreen(nav: NavHostController, id: String) {
                         modifier = Modifier.weight(1f), maxLines = 5, shape = RoundedCornerShape(20.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    FilledIconButton(
+                    if (text.isBlank() && attached == null) FilledIconButton(
+                        enabled = writer != null,
+                        onClick = {
+                            val granted = ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            if (granted) { if (AudioRec.start(ctx)) recording = true } else micPerm.launch(android.Manifest.permission.RECORD_AUDIO)
+                        },
+                    ) { Icon(Icons.Filled.Mic, "Gravar áudio") }
+                    else FilledIconButton(
                         enabled = (text.isNotBlank() || attached != null) && writer != null,
                         onClick = { Store.sendChatMessage(id, writer, text.trim(), attached); text = ""; attached = null },
                     ) { Icon(Icons.AutoMirrored.Filled.Send, "Enviar") }

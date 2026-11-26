@@ -69,6 +69,8 @@ fun CompanionsScreen(nav: NavHostController) {
     var editCloud by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     val now = rememberNow()
+    // busca recados novos dos companions ao abrir a tela
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { runCatching { com.plurali.app.sys.CompanionInbox.fetch(ctx) } } }
 
     if (!admin) {
         // membros: só leitura, para saber quem acompanha o sistema e o que cada pessoa vê
@@ -80,6 +82,7 @@ fun CompanionsScreen(nav: NavHostController) {
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                item { CompanionMessagesBlock(d) }
                 if (d.companions.isEmpty()) item { EmptyHint("Ninguém de fora acompanha o sistema.") }
                 items(d.companions, key = { it.id }) { c ->
                     SpRow(0xFFD6AC5E) {
@@ -110,6 +113,7 @@ fun CompanionsScreen(nav: NavHostController) {
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            item { CompanionMessagesBlock(d) }
             if (d.cloud == null || editCloud) item { CloudSetup(d.cloud) { editCloud = false } }
             else item {
                 Column(Modifier.fillMaxWidth().themed().padding(12.dp)) {
@@ -248,6 +252,7 @@ fun CompanionEditScreen(nav: NavHostController, id: String) {
 
             SectionHeader("O que essa pessoa pode ver")
             PermRow("Quem está no front", "E recebe aviso quando o front muda.", p.front) { p = p.copy(front = it) }
+            PermRow("Pode mandar recados", "A pessoa escreve um recado no app dela e ele chega aqui (e numa notificação).", p.messages) { p = p.copy(messages = it) }
             if (p.front) {
                 PermRow("Status do front", "O texto de status (ex.: co-consciente).", p.frontStatus, indent = true) { p = p.copy(frontStatus = it) }
                 PermRow("Custom fronts", "Mostra estados como “blurry”. Desligado: não aparecem.", p.customFronts, indent = true) { p = p.copy(customFronts = it) }
@@ -394,5 +399,35 @@ private fun PermRow(title: String, sub: String?, value: Boolean, indent: Boolean
             if (sub != null) Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(value, onChange)
+    }
+}
+
+/** Recados que os companions mandaram para o sistema. */
+@Composable
+fun CompanionMessagesBlock(d: AppData) {
+    val msgs = d.companionMessages.sortedByDescending { it.time }
+    if (msgs.isEmpty()) return
+    val now = rememberNow()
+    val unread = msgs.count { !it.read }
+    Column(Modifier.fillMaxWidth().themed().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.MarkEmailUnread, null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(8.dp))
+            Text("Recados dos companions" + if (unread > 0) " ($unread novos)" else "", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            if (unread > 0) TextButton(onClick = { Store.readCompanionMessages() }) { Text("Marcar lidos") }
+        }
+        msgs.take(20).forEach { m ->
+            Row(verticalAlignment = Alignment.Top) {
+                Box(Modifier.padding(top = 6.dp).size(8.dp).clip(RoundedCornerShape(50))
+                    .background(if (m.read) Color.Transparent else MaterialTheme.colorScheme.error))
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("${d.companions.find { it.id == m.companionId }?.name ?: "Companion"} · ${fmtWhen(m.time, now)}",
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(m.text)
+                }
+                IconButton(onClick = { Store.deleteCompanionMessage(m.id) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Close, "Apagar", Modifier.size(16.dp)) }
+            }
+        }
     }
 }

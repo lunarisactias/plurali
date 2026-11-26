@@ -220,7 +220,12 @@ object CompanionSync {
         }
         val body = if (!p.body) null else d.body.filter { it.value.isNotBlank() }.map { SnapBody(it.section, it.label, it.value) }
 
-        return Snapshot(d.systemName.ifBlank { "Sistema" }, c.name, System.currentTimeMillis(), front, notices, events, people, safety, body, history)
+        // o companion segue o visual de quem está no front (se a pessoa escolheu um)
+        val look = d.currentFronts().firstNotNullOfOrNull { d.appearance[it.subjectId] }?.copy(wallpaper = null)
+        return Snapshot(
+            d.systemName.ifBlank { "Sistema" }, c.name, System.currentTimeMillis(), front, notices, events, people, safety, body, history,
+            canMessage = p.messages, appearance = look?.let { AppearanceJson.encode(it).toString() },
+        )
     }
 }
 
@@ -229,5 +234,58 @@ class CompanionSyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWor
         PluraliApplication.ensure(applicationContext)
         return if (CompanionSync.syncNow(applicationContext) == null) Result.success()
         else if (runAttemptCount < 5) Result.retry() else Result.failure()
+    }
+}
+
+/** Busca os recados que os companions mandaram (a cada 30 min e ao abrir a tela de companions). */
+object CompanionInbox {
+    private const val WORK = "companion-inbox"
+
+    fun schedule(ctx: Context) {
+        val wm = WorkManager.getInstance(ctx)
+        if (Store.data.value.companions.none { it.perms.messages }) { wm.cancelUniqueWork(WORK); return }
+        wm.enqueueUniquePeriodicWork(
+            WORK, androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            androidx.work.PeriodicWorkRequestBuilder<CompanionInboxWorker>(30, TimeUnit.MINUTES)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build(),
+        )
+    }
+
+    /** Retorna quantos recados novos chegaram. */
+    @Synchronized
+    fun fetch(ctx: Context): Int {
+        val d = Store.data.value
+        val cloud = d.cloud ?: return 0
+        val fb = CompanionSync.client(cloud)
+        val known = d.companionMessages.map { it.id }.toSet()
+        val fresh = mutableListOf<CompanionMessage>()
+        for (c in d.companions.filter { it.perms.messages }) {
+            for (slot in 0 until Inbox.SLOTS) {
+                val raw = runCatching { fb.get(Inbox.path(c.shareId, c.key, slot)) }.getOrNull() ?: break
+                val plain = ShareCrypto.open(JSONObject(raw).optString("data"), c.key) ?: continue
+                Inbox.decode(plain).forEach { m ->
+                    val id = c.id + ":" + m.id
+                    if (id !in known) fresh += CompanionMessage(id, c.id, m.text, m.time)
+                }
+            }
+        }
+        if (fresh.isNotEmpty()) {
+            Store.addCompanionMessages(fresh)
+            fresh.groupBy { it.companionId }.forEach { (cid, l) ->
+                val name = d.companions.find { it.id == cid }?.name ?: "Companion"
+                Notifier.post(ctx, ("cmsg:$cid").hashCode(), Notifier.CH_MSG,
+                    if (l.size == 1) "Recado de $name" else "${l.size} recados de $name", l.last().text, "companions")
+            }
+        }
+        return fresh.size
+    }
+}
+
+class CompanionInboxWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result {
+        PluraliApplication.ensure(applicationContext)
+        runCatching { CompanionInbox.fetch(applicationContext) }
+        return Result.success()
     }
 }

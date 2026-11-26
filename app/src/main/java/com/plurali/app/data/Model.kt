@@ -100,8 +100,10 @@ data class ChatMessage(
     val image: String? = null,
     val reactions: Map<String, String> = emptyMap(), // membro -> emoji
     val pinned: Boolean = false,
+    val audio: String? = null,   // mensagem de voz (audio/....m4a)
+    val audioMs: Long = 0L,
 ) {
-    fun canEdit(now: Long = System.currentTimeMillis()) = now - time < MESSAGE_EDIT_WINDOW_MS
+    fun canEdit(now: Long = System.currentTimeMillis()) = audio == null && now - time < MESSAGE_EDIT_WINDOW_MS
 }
 
 /** Aviso do mural da tela inicial. */
@@ -220,6 +222,7 @@ data class WelcomeCard(
     val id: String, val title: String, val text: String, val color: Long = 0xFFD6AC5E,
     val image: String? = null, val size: Int = 6,
     val align: String = "start", // alinhamento do texto: start | center | end
+    val voice: String? = null, val voiceMs: Long = 0, // voz gravada (audio/…m4a); sem ela, usa leitura automática
 )
 
 val SUGGESTED_WELCOME = listOf(
@@ -252,6 +255,7 @@ object FirebaseProject {
 /** O que um companion pode ver. memberIds = null → todos os membros ativos. */
 data class CompanionPerms(
     val front: Boolean = true,
+    val messages: Boolean = true, // o companion pode mandar recados para o sistema
     val frontStatus: Boolean = false,
     val customFronts: Boolean = true,
     val notices: Boolean = true,
@@ -296,36 +300,37 @@ data class Vault(val salt: String, val iv: String, val data: String)
 /** Backup automático criptografado no Firebase. O código é a única forma de restaurar em outro aparelho. */
 data class CloudBackup(val code: String, val enabled: Boolean = true, val freq: String = "6h", val wifiOnly: Boolean = true)
 
-/** Aparência de um perfil: chave "system", "guest" ou o id do membro. */
-data class Appearance(
-    val theme: String = "classic",
-    val mode: String = "dark",           // só no tema clássico: dark | light | system
-    val accent: Long? = null,            // null = cor do tema
-    val textScale: Float = 1f,
-    val titleFont: String = "theme",     // theme | sans | serif | cursive | mono
-    val bodyFont: String = "sans",
-    val cardShape: String = "theme",     // theme ou um id de CARD_SHAPES
-    val avatarShape: String = "theme",   // theme ou um id de AVATAR_SHAPES
-    val strip: String = "theme",         // cor do membro nos cartões: theme | left | top | border | glow | corner | none
-    val border: String = "theme",        // contorno dos cartões: theme | none | solid | dashed | dotted | double | sketch | glow
-    val decor: Boolean = true,           // enfeite embaixo da barra de título
-    val headerMarks: Boolean = true,     // enfeite nos títulos de seção
-    val pattern: Float = 1f,             // intensidade dos desenhos de fundo (0 = sem)
-    val animate: Boolean = false,
-    val wallpaper: String? = null,       // imagem de fundo (wallpapers/...)
-    val wallpaperDim: Float = 0.55f,
-    val followFront: Boolean = false,
-    // cores próprias (null = cor do tema)
-    val bg: Long? = null,                // fundo
-    val bg2: Long? = null,               // segunda cor do fundo (degradê)
-    val card: Long? = null,              // cartões e caixas
-    val bars: Long? = null,              // barra de cima e de baixo
-    val text: Long? = null,              // texto (null = automático, para dar leitura)
-    val pronoun: Long? = null,           // pronomes e detalhes
-    val chip: Long? = null,              // seleção, etiquetas e filtros
-    val patternColor: Long? = null,      // desenhos do fundo e enfeites
-    val memberTint: Float = 0f,          // quanto o cartão de cada membro pega a cor dele (0 = nada)    // (só no perfil Sistema) usar a aparência de quem está no front
+
+/** Recado para quem entrar no front depois. targetId = um membro específico (null = quem entrar primeiro). */
+data class FrontNote(
+    val id: String, val authorId: String?, val text: String, val createdAt: Long,
+    val targetId: String? = null, val doneById: String? = null, val doneAt: Long? = null,
 )
+
+/** Remédio. times = minutos do dia (8h = 480); days = dias da semana (1 = segunda … 7 = domingo). */
+data class Medication(
+    val id: String, val name: String, val dose: String = "", val times: List<Int> = listOf(480),
+    val days: Set<Int> = (1..7).toSet(), val notes: String = "", val active: Boolean = true, val color: Long = 0xFF4DB6AC,
+)
+
+/** Dose registrada: quem tomou e quando. slot = horário previsto daquela dose. */
+data class MedTake(
+    val id: String, val medId: String, val slot: Long, val takenAt: Long,
+    val byId: String?, val byName: String, val skipped: Boolean = false,
+)
+
+/** Tarefa da casa / rotina. repeat: none | daily | weekly | monthly. */
+data class TaskItem(
+    val id: String, val title: String, val notes: String = "", val assigneeId: String? = null, val due: Long? = null,
+    val repeat: String = "none", val doneAt: Long? = null, val doneById: String? = null,
+    val createdAt: Long = System.currentTimeMillis(), val createdById: String? = null,
+)
+
+/** Página do diário do sistema (texto formatado e fotos). */
+data class DiaryEntry(val id: String, val authorId: String?, val time: Long, val text: String, val images: List<String> = emptyList())
+
+/** Recado que um companion mandou para o sistema. */
+data class CompanionMessage(val id: String, val companionId: String, val text: String, val time: Long, val read: Boolean = false)
 
 data class AppData(
     val systemName: String = "",
@@ -355,6 +360,13 @@ data class AppData(
     val companions: List<CompanionProfile> = emptyList(),
     val cloudBackup: CloudBackup? = null,
     val appearance: Map<String, Appearance> = emptyMap(),
+    val frontNotes: List<FrontNote> = emptyList(),
+    val meds: List<Medication> = emptyList(),
+    val medTakes: List<MedTake> = emptyList(),
+    val tasks: List<TaskItem> = emptyList(),
+    val diary: List<DiaryEntry> = emptyList(),
+    val companionMessages: List<CompanionMessage> = emptyList(),
+    val lastSeen: Map<String, Long> = emptyMap(), // membro -> última vez que usou o app (para "O que eu perdi?")
 ) {
     val loginsEnabled get() = adminPassword != null
 }

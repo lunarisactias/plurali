@@ -52,6 +52,50 @@ object Store {
         if (notify) runCatching { onChange?.invoke(nd) }
     }
 
+    // ---------- recados para quem entrar no front ----------
+    fun upsertFrontNote(n: FrontNote) = update { it.copy(frontNotes = it.frontNotes.upsert(n) { x -> x.id }) }
+    fun deleteFrontNote(id: String) = update { d -> d.copy(frontNotes = d.frontNotes.filterNot { it.id == id }) }
+    fun doneFrontNote(id: String, by: String?) = update { d ->
+        d.copy(frontNotes = d.frontNotes.map { if (it.id == id) it.copy(doneById = by, doneAt = now()) else it })
+    }
+
+    // ---------- remédios ----------
+    fun upsertMed(m: Medication) = update { it.copy(meds = it.meds.upsert(m) { x -> x.id }) }
+    fun deleteMed(id: String) = update { d -> d.copy(meds = d.meds.filterNot { it.id == id }) }
+    fun addMedTake(t: MedTake) = update { d -> d.copy(medTakes = (d.medTakes + t).sortedBy { it.takenAt }.takeLast(2000)) }
+    fun deleteMedTake(id: String) = update { d -> d.copy(medTakes = d.medTakes.filterNot { it.id == id }) }
+
+    // ---------- tarefas ----------
+    fun upsertTask(t: TaskItem) = update { it.copy(tasks = it.tasks.upsert(t) { x -> x.id }) }
+    fun deleteTask(id: String) = update { d -> d.copy(tasks = d.tasks.filterNot { it.id == id }) }
+    fun reopenTask(id: String) = update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(doneAt = null, doneById = null) else it }) }
+    /** Marca como feita; se repete, cria a próxima. */
+    fun completeTask(id: String, by: String?) = update { d ->
+        val t = d.tasks.find { it.id == id } ?: return@update d
+        val done = t.copy(doneAt = now(), doneById = by)
+        val next = if (t.repeat == "none") null else {
+            val base = java.time.Instant.ofEpochMilli(t.due ?: now()).atZone(java.time.ZoneId.systemDefault())
+            val nd = when (t.repeat) { "daily" -> base.plusDays(1); "weekly" -> base.plusWeeks(1); else -> base.plusMonths(1) }
+            t.copy(id = newId(), due = nd.toInstant().toEpochMilli(), doneAt = null, doneById = null, createdAt = now())
+        }
+        d.copy(tasks = d.tasks.map { if (it.id == id) done else it } + listOfNotNull(next))
+    }
+
+    // ---------- diário ----------
+    fun upsertDiary(e: DiaryEntry) = update { it.copy(diary = it.diary.upsert(e) { x -> x.id }) }
+    fun deleteDiary(id: String) = update { d -> d.copy(diary = d.diary.filterNot { it.id == id }) }
+
+    // ---------- recados dos companions ----------
+    fun addCompanionMessages(l: List<CompanionMessage>) = update { d ->
+        val known = d.companionMessages.map { it.id }.toSet()
+        d.copy(companionMessages = (d.companionMessages + l.filter { it.id !in known }).sortedBy { it.time }.takeLast(500))
+    }
+    fun readCompanionMessages() = update { d -> d.copy(companionMessages = d.companionMessages.map { it.copy(read = true) }) }
+    fun deleteCompanionMessage(id: String) = update { d -> d.copy(companionMessages = d.companionMessages.filterNot { it.id == id }) }
+
+    /** Guarda quando a pessoa usou o app pela última vez (sem disparar efeitos). */
+    fun setLastSeen(memberId: String, time: Long) = update(notify = false) { d -> d.copy(lastSeen = d.lastSeen + (memberId to time)) }
+
     // ---------- companions ----------
     fun setCloud(c: CloudConfig?) = update { it.copy(cloud = c) }
     fun setCloudBackup(b: CloudBackup?) = update { it.copy(cloudBackup = b) }
@@ -233,10 +277,10 @@ object Store {
         d.copy(messages = d.messages.map { if (it.id == msgId) it.copy(pinned = pinned) else it })
     }
 
-    fun sendChatMessage(chatId: String, authorId: String?, text: String, image: String? = null) = update { d ->
+    fun sendChatMessage(chatId: String, authorId: String?, text: String, image: String? = null, audio: String? = null, audioMs: Long = 0L) = update { d ->
         val t = now()
         d.copy(
-            messages = d.messages + ChatMessage(newId(), chatId, authorId, text, t, image = image),
+            messages = d.messages + ChatMessage(newId(), chatId, authorId, text, t, image = image, audio = audio, audioMs = audioMs),
             chats = d.chats.map { c ->
                 if (c.id == chatId && authorId != null) c.copy(readBy = c.readBy + (authorId to t)) else c
             },
@@ -319,12 +363,13 @@ object Store {
     }
 
     // ---------- backup ----------
-    private val fileDirs = setOf("avatars", "banners", "chat", "wallpapers", "welcome")
+    private val fileDirs = setOf("avatars", "banners", "chat", "wallpapers", "welcome", "diary", "audio")
 
-    /** Todos os arquivos (fotos) usados pelos dados: avatares, capas e imagens das conversas. */
+    /** Todos os arquivos (fotos e áudios) usados pelos dados: avatares, capas e imagens das conversas. */
     private fun AppData.referencedFiles(): Set<String> =
         ((members + pendingMembers).flatMap { listOfNotNull(it.avatar, it.banner) } + messages.mapNotNull { it.image } +
-            appearance.values.mapNotNull { it.wallpaper } + welcome.mapNotNull { it.image }).toSet()
+            appearance.values.mapNotNull { it.wallpaper } + welcome.flatMap { listOfNotNull(it.image, it.voice) } +
+            diary.flatMap { it.images } + messages.mapNotNull { it.audio }).toSet()
 
     private fun safePath(p: String): Boolean {
         val parts = p.split('/')

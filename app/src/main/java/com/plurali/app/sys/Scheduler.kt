@@ -15,7 +15,10 @@ import java.time.ZoneId
  * timers de front, enquetes com prazo) e agenda um único alarme do Android para ele.
  */
 object Scheduler {
-    private data class Due(val time: Long, val key: String, val title: String, val text: String, val channel: String, val route: String?)
+    private data class Due(
+        val time: Long, val key: String, val title: String, val text: String, val channel: String, val route: String?,
+        val med: Pair<String, Long>? = null, // remédio e horário da dose (para o botão "Tomei")
+    )
 
     private val zone: ZoneId get() = ZoneId.systemDefault()
     private fun LocalDate.at(h: Int, m: Int) = atTime(h, m).atZone(zone).toInstant().toEpochMilli()
@@ -81,6 +84,30 @@ object Scheduler {
             }
         }
 
+        // remédios: na hora da dose e, se ninguém registrou, de novo 30 min depois
+        d.meds.filter { it.active }.forEach { m ->
+            var day = firstDay.minusDays(1)
+            while (day <= lastDay) {
+                if (day.dayOfWeek.value in m.days) m.times.forEach { t ->
+                    val slot = day.at(t / 60, t % 60)
+                    if (d.medTakes.none { it.medId == m.id && it.slot == slot }) {
+                        val hh = "%02d:%02d".format(t / 60, t % 60)
+                        if (slot in (from + 1)..to) out += Due(
+                            slot, "med:${m.id}:$slot", "Hora do remédio: ${m.name}",
+                            listOf(m.dose, "Toque em “Tomei” quando tomar.").filter { it.isNotBlank() }.joinToString(" · "),
+                            Notifier.CH_REMIND, "meds", m.id to slot,
+                        )
+                        val late = slot + 30 * 60_000L
+                        if (late in (from + 1)..to) out += Due(
+                            late, "med:${m.id}:$slot", "Ainda não registrado: ${m.name}",
+                            "Era às $hh. Se já tomou, toque em “Tomei” para ninguém tomar de novo.", Notifier.CH_REMIND, "meds", m.id to slot,
+                        )
+                    }
+                }
+                day = day.plusDays(1)
+            }
+        }
+
         // enquetes com prazo
         if (Prefs.pollNotif) d.polls.forEach { p ->
             val t = p.endTime ?: return@forEach
@@ -107,7 +134,18 @@ object Scheduler {
         if (from > now) from = now
         if (now - from > 6 * 3_600_000L) from = now - 6 * 3_600_000L // não inundar depois de muito tempo desligado
         val d = Store.data.value
-        dueBetween(d, from, now).forEach { Notifier.post(ctx, it.key.hashCode(), it.channel, it.title, it.text, it.route) }
+        dueBetween(d, from, now).forEach { due ->
+            val actions = due.med?.let { (medId, slot) ->
+                val pi = PendingIntent.getBroadcast(
+                    ctx, due.key.hashCode(),
+                    Intent(ctx, MedActionReceiver::class.java).setAction(MedActionReceiver.TAKEN)
+                        .putExtra("med", medId).putExtra("slot", slot).putExtra("nid", due.key.hashCode()),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                listOf("Tomei" to pi)
+            }.orEmpty()
+            Notifier.post(ctx, due.key.hashCode(), due.channel, due.title, due.text, due.route, actions)
+        }
         Prefs.lastAlarmCheck = now
         reschedule(ctx, d, now)
     }
@@ -142,6 +180,7 @@ class BootReceiver : BroadcastReceiver() {
         Notifier.front(ctx, Store.data.value)
         AutoBackup.schedule(ctx)
         CloudBackupSync.schedule(ctx)
+        CompanionInbox.schedule(ctx)
     }
 }
 
@@ -156,4 +195,30 @@ class FrontActionReceiver : BroadcastReceiver() {
     }
 
     companion object { const val SWITCH = "com.plurali.app.SWITCH_FRONT" }
+}
+
+/** Botão "Tomei" da notificação do remédio: registra a dose com quem está no front. */
+class MedActionReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        PluraliApplication.ensure(ctx)
+        if (intent.action != TAKEN) return
+        val medId = intent.getStringExtra("med") ?: return
+        val slot = intent.getLongExtra("slot", 0L)
+        val nid = intent.getIntExtra("nid", 0)
+        val d = Store.data.value
+        val m = d.meds.find { it.id == medId } ?: return
+        val now = System.currentTimeMillis()
+        val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        val already = d.medTakes.lastOrNull { it.medId == medId && it.slot == slot && !it.skipped }
+        if (already != null) {
+            Notifier.post(ctx, nid, Notifier.CH_REMIND, "${m.name}: já estava registrado", "Tomado às ${hm.format(already.takenAt)} por ${already.byName}. Não tome de novo.", "meds")
+            return
+        }
+        val byId = d.currentFronts().map { it.subjectId }.firstOrNull { id -> d.members.any { it.id == id } }
+        val byName = d.members.find { it.id == byId }?.name ?: "Sistema"
+        Store.addMedTake(MedTake(newId(), medId, slot, now, byId, byName))
+        Notifier.post(ctx, nid, Notifier.CH_REMIND, "✓ ${m.name} registrado", "Tomado às ${hm.format(now)} por $byName.", "meds")
+    }
+
+    companion object { const val TAKEN = "com.plurali.app.MED_TAKEN" }
 }

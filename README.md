@@ -25,12 +25,21 @@ Kotlin + Jetpack Compose. Os dados ficam só no aparelho (`files/data.json`, mai
 - **Tela de entrada simples**: Login do Sistema · Entrar sem login · Entrar com meu perfil (a lista de perfis só aparece nessa última, com bolinha de mensagens não lidas)
 - **Mural de boas-vindas em grade**: textos e fotos (planta da casa, família…) lado a lado, com tamanho ajustável e foto em tela cheia com zoom
 - **Texto formatado** no mural de boas-vindas e no mural de avisos: negrito, itálico, sublinhado, riscado, cor da letra, marca-texto, letra grande/pequena e alinhamento
+- **Ouvir em voz alta**: cada caixa de texto do mural de boas-vindas tem um botão de ouvir, e há "Ouvir tudo". Dá para **gravar a própria voz** lendo cada item; sem gravação, o celular lê o texto com a voz automática
+- **O que eu perdi?**: ao entrar com o perfil, mostra o que aconteceu desde a última vez (front, avisos, conversas, diário, tarefas, remédios, recados de companions), sem repetir o que a própria pessoa fez
+- **Recados para quem entrar no front**: aparecem no início e chegam como notificação quando a pessoa entra
+- **Remédios** com horários, notificação com botão "Tomei", registro de quem tomou/pulou e aviso de dose já tomada
+- **Tarefas compartilhadas** com responsável, prazo e repetição (todo dia/semana/mês), registrando quem fez
+- **Diário do sistema** com fotos e texto formatado
+- **Mensagens de voz** nas conversas
 - Campos com **visibilidade** (todos / só membros / privado), **busca** geral
 
 ## Plurali Companion (app para pessoas de fora do sistema)
 Projeto `companion/` (APK `PluraliCompanion.apk`). Quem acompanha o sistema vê só o que o perfil dela permite
 (front, mural, calendário, perfil completo de cada membro — capa, foto, papéis, apresentação, como acalmar, gostos, aniversário, campos, grupos, relações, wishlist, próximos compromissos e tempo de front —, histórico, plano de segurança, dados gerais do corpo)
 e recebe aviso quando o front muda (o app confere a cada ~15 min).
+O Companion usa o **tema de quem está no front** (as mesmas cores, formatos e enfeites escolhidos no Plurali) e, se o perfil permitir,
+pode **mandar recados para o sistema**, que chegam no Plurali com notificação.
 
 - Os dados vão para o Firebase Realtime Database **criptografados de ponta a ponta** (AES-GCM, uma chave por companion,
   que só existe no Plurali e no convite/QR). O Google só guarda bytes embaralhados.

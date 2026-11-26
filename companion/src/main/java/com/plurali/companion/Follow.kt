@@ -153,6 +153,33 @@ object Poller {
         runCatching { NotificationManagerCompat.from(ctx).notify(id.hashCode(), n) }
     }
 
+    /** Manda um recado para o sistema (fica num caminho do próprio companion, criptografado). null = deu certo. */
+    fun sendMessage(f: Followed, text: String): String? = try {
+        val inv = f.invite
+        val fb = clients.getOrPut(inv.dbUrl + inv.apiKey) { FirebaseRest(inv.dbUrl, inv.apiKey, Follows.tokens(inv)) }
+        fb.token()
+        val uid = fb.uid ?: error("sem sessão")
+        var sent = false
+        for (slot in 0 until Inbox.SLOTS) {
+            val path = Inbox.path(inv.shareId, inv.key, slot)
+            val raw = fb.get(path)
+            if (raw != null && JSONObject(raw).optString("owner") != uid) continue // vaga de outra instalação
+            val old = raw?.let { ShareCrypto.open(JSONObject(it).optString("data"), inv.key) }?.let { Inbox.decode(it) }.orEmpty()
+            val list = (old + Inbox.Msg(java.util.UUID.randomUUID().toString(), text, System.currentTimeMillis())).takeLast(50)
+            fb.put(
+                path,
+                JSONObject().put("owner", uid).put("v", 1).put("kind", "inbox")
+                    .put("updated", JSONObject().put(".sv", "timestamp"))
+                    .put("data", ShareCrypto.seal(Inbox.encode(list), inv.key)).toString(),
+            )
+            sent = true
+            break
+        }
+        if (sent) null else "Não há espaço para recados. Peça um convite novo ao sistema."
+    } catch (e: Exception) {
+        e.message ?: e.javaClass.simpleName
+    }
+
     const val CH_FRONT = "front"
 
     fun schedule(ctx: Context) {

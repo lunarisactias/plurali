@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         PluraliApplication.ensure(this)
         handle(intent)
+        com.plurali.app.sys.CompanionInbox.schedule(this)
         setContent {
             val app = currentAppearance()
             val dark = app.isDark()
@@ -64,6 +65,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         Session.stoppedAt = System.currentTimeMillis()
+        (Session.who as? com.plurali.app.ui.Who.Member)?.let { Store.setLastSeen(it.id, System.currentTimeMillis()) }
     }
 
     override fun onStart() {
@@ -87,76 +89,3 @@ object Sp {
     val line = Color(0xFF3B3E47)
 }
 
-/** Cores extras que mudam entre claro e escuro. */
-data class ExtraColors(
-    val dark: Boolean, val frontButton: Color, val timer: Color, val myBubble: Color,
-    val topBar: Color = Color.Unspecified, val bottomBar: Color = Color.Unspecified, val barContent: Color = Color.Unspecified,
-)
-
-val LocalExtra = staticCompositionLocalOf { ExtraColors(true, Color(0xFF22222C), Color(0xFF12131A), Color(0xFF384048)) }
-
-private fun family(id: String): FontFamily = when (id) {
-    "serif" -> FontFamily.Serif
-    "cursive" -> FontFamily.Cursive
-    "mono" -> FontFamily.Monospace
-    else -> FontFamily.SansSerif
-}
-
-/** Tema do app montado a partir da aparência do perfil: cores, letras, formatos e enfeites. */
-@Composable
-fun PluraliTheme(a: Appearance, content: @Composable () -> Unit) {
-    val dark = a.isDark()
-    val ui = buildUi(a, dark)
-    val p = ui.theme.palette
-    val accent = ui.accent
-    val onAccent = if (accent.luminance() > 0.55f) Color(0xFF1D2228) else Color.White
-    fun c(v: Long) = Color(v)
-    val scheme = (if (p.dark) darkColorScheme() else lightColorScheme()).copy(
-        primary = accent, onPrimary = onAccent,
-        primaryContainer = c(p.pill), onPrimaryContainer = c(p.text),
-        secondary = accent, onSecondary = onAccent,
-        secondaryContainer = c(p.pill), onSecondaryContainer = c(p.text),
-        tertiary = c(p.pronoun),
-        background = c(p.bg), onBackground = c(p.text),
-        surface = c(p.bg), onSurface = c(p.text),
-        surfaceVariant = c(p.field), onSurfaceVariant = c(p.muted),
-        surfaceContainerLowest = c(p.bg), surfaceContainerLow = c(p.card), surfaceContainer = c(p.card),
-        surfaceContainerHigh = c(p.field), surfaceContainerHighest = c(p.field),
-        surfaceTint = Color.Transparent,
-        outline = c(p.line), outlineVariant = c(p.line),
-        error = if (p.dark) Color(0xFFEF6B6B) else Color(0xFFC62828),
-    )
-    val titleFam = family(if (a.titleFont == "theme") ui.theme.titleFont else a.titleFont)
-    val bodyFam = family(a.bodyFont)
-    val w = FontWeight(ui.theme.titleWeight)
-    val base = Typography()
-    val typo = Typography(
-        displayLarge = base.displayLarge.copy(fontFamily = titleFam, fontWeight = w),
-        displayMedium = base.displayMedium.copy(fontFamily = titleFam, fontWeight = w),
-        displaySmall = base.displaySmall.copy(fontFamily = titleFam, fontWeight = w),
-        headlineLarge = base.headlineLarge.copy(fontFamily = titleFam, fontWeight = w),
-        headlineMedium = base.headlineMedium.copy(fontFamily = titleFam, fontWeight = w),
-        headlineSmall = base.headlineSmall.copy(fontFamily = titleFam, fontWeight = w),
-        titleLarge = base.titleLarge.copy(fontFamily = titleFam, fontWeight = w),
-        titleMedium = base.titleMedium.copy(fontFamily = bodyFam),
-        titleSmall = base.titleSmall.copy(fontFamily = titleFam, fontWeight = w),
-        bodyLarge = base.bodyLarge.copy(fontFamily = bodyFam),
-        bodyMedium = base.bodyMedium.copy(fontFamily = bodyFam),
-        bodySmall = base.bodySmall.copy(fontFamily = bodyFam),
-        labelLarge = base.labelLarge.copy(fontFamily = bodyFam),
-        labelMedium = base.labelMedium.copy(fontFamily = bodyFam),
-        labelSmall = base.labelSmall.copy(fontFamily = bodyFam),
-    )
-    val th = ui.theme
-    val shapes = Shapes(extraSmall = th.small, small = th.small, medium = th.medium, large = th.large, extraLarge = th.large)
-    val barContent = p.bars?.let { c(com.plurali.app.ui.theme.readableOn(it)) } ?: c(p.text)
-    val extra = ExtraColors(p.dark, c(p.frontButton), c(p.timer), c(p.bubble), c(p.bars ?: p.card), c(p.bars ?: p.field), barContent)
-    val density = LocalDensity.current
-    CompositionLocalProvider(
-        LocalExtra provides extra,
-        LocalUi provides ui,
-        LocalDensity provides Density(density.density, density.fontScale * a.textScale),
-    ) {
-        MaterialTheme(colorScheme = scheme, typography = typo, shapes = shapes, content = content)
-    }
-}

@@ -46,6 +46,14 @@ import androidx.compose.ui.unit.sp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.plurali.shared.*
+import com.plurali.app.data.Appearance
+import com.plurali.app.data.AppearanceJson
+import com.plurali.app.ui.theme.LocalUi
+import com.plurali.app.ui.theme.Strip
+import com.plurali.app.ui.theme.ThemedBackground
+import com.plurali.app.ui.theme.isDark
+import com.plurali.app.ui.theme.themedCard
+import com.plurali.app.LocalExtra
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -64,7 +72,7 @@ class MainActivity : ComponentActivity() {
         CompanionApp.ensure(this)
         enableEdgeToEdge(SystemBarStyle.dark(AColor.TRANSPARENT), SystemBarStyle.dark(AColor.TRANSPARENT))
         openSystem = intent?.getStringExtra("system")
-        setContent { CompanionTheme { CompanionRoot(openSystem) { openSystem = null } } }
+        setContent { CompanionRoot(openSystem) { openSystem = null } }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -73,27 +81,30 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ---------------- tema (mesmas cores do Plurali) ----------------
+// ---------------- tema: o mesmo do Plurali, seguindo quem está no front ----------------
 
-private val Gold = Color(0xFFD6AC5E)
-private val Bg = Color(0xFF1D2228)
-private val Card = Color(0xFF232732)
-private val Field = Color(0xFF2B2E35)
-private val Muted = Color(0xFFA0A3AB)
-private val Pron = Color(0xFF7C84A6)
+private val Gold: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val Bg: Color @Composable get() = MaterialTheme.colorScheme.background
+private val Card: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainer
+private val Field: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainerHigh
+private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+private val Pron: Color @Composable get() = MaterialTheme.colorScheme.tertiary
+
+/** Aparência que veio do sistema (a de quem está no front); sem ela, o tema padrão. */
+fun Snapshot?.look(): Appearance =
+    this?.appearance?.let { runCatching { AppearanceJson.decode(org.json.JSONObject(it)) }.getOrNull() } ?: Appearance()
 
 @Composable
-fun CompanionTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Gold, onPrimary = Bg, secondary = Gold, secondaryContainer = Color(0xFF384048),
-            onSecondaryContainer = Color(0xFFECECEE), tertiary = Pron, background = Bg, surface = Bg,
-            onSurface = Color(0xFFECECEE), onBackground = Color(0xFFECECEE), onSurfaceVariant = Muted,
-            surfaceContainer = Card, surfaceContainerLow = Card, surfaceContainerHigh = Field, surfaceContainerHighest = Field,
-            surfaceVariant = Field, outline = Color(0xFF3B3E47), surfaceTint = Color.Transparent,
-        ),
-        content = content,
-    )
+fun CompanionTheme(a: Appearance = Appearance(), content: @Composable () -> Unit) {
+    val activity = LocalContext.current as? ComponentActivity
+    val dark = a.isDark()
+    LaunchedEffect(dark) {
+        activity?.enableEdgeToEdge(
+            statusBarStyle = if (dark) SystemBarStyle.dark(AColor.TRANSPARENT) else SystemBarStyle.light(AColor.TRANSPARENT, AColor.TRANSPARENT),
+            navigationBarStyle = if (dark) SystemBarStyle.dark(AColor.TRANSPARENT) else SystemBarStyle.light(AColor.TRANSPARENT, AColor.TRANSPARENT),
+        )
+    }
+    com.plurali.app.PluraliTheme(a, content)
 }
 
 private val ptBR = Locale("pt", "BR")
@@ -122,30 +133,36 @@ private fun Avatar(name: String, color: Long, b64: String?, size: Dp) {
     val bmp: ImageBitmap? = remember(b64) {
         b64?.let { runCatching { Base64.decode(it, Base64.NO_WRAP).let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() } }.getOrNull() }
     }
-    Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.2f)).background(Color(color)), contentAlignment = Alignment.Center) {
+    val ui = LocalUi.current
+    val ears = ui.avatarId == "cat" || ui.avatarId == "bunny"
+    Box(Modifier.size(size).clip(ui.avatarShape).background(Color(color)), contentAlignment = Alignment.Center) {
         if (bmp != null) Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        else Text(name.take(1).uppercase(), color = if (Color(color).luminance() > 0.5f) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.42f).sp)
+        else Text(name.take(1).uppercase(), color = if (Color(color).luminance() > 0.5f) Color.Black else Color.White, fontWeight = FontWeight.Bold,
+            fontSize = (size.value * (if (ears) 0.34f else 0.42f)).sp, modifier = if (ears) Modifier.padding(top = size * 0.24f) else Modifier)
     }
 }
 
 /** Cartão com a "meia-lua" colorida, igual ao Plurali/SimplyPlural. */
 @Composable
 private fun SpCard(color: Long, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
-    Box(modifier.fillMaxWidth().clip(shape).background(Color(color))) {
-        Row(
-            Modifier.padding(start = 4.dp).fillMaxWidth().clip(shape).background(Card)
-                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically, content = content,
-        )
-    }
+    val ui = LocalUi.current
+    Row(
+        modifier.fillMaxWidth()
+            .themedCard(ui, MaterialTheme.colorScheme.surfaceContainer, Color(color), MaterialTheme.colorScheme.outline, MaterialTheme.colorScheme.onSurface)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(start = if (ui.strip == Strip.LEFT) 14.dp else 10.dp, end = 10.dp, top = 10.dp + ui.cardTopExtra + (if (ui.strip == Strip.SPOTS) 8.dp else 0.dp), bottom = 10.dp + ui.cardBottomExtra),
+        verticalAlignment = Alignment.CenterVertically, content = content,
+    )
 }
 
 @Composable
 private fun Hint(text: String) = Text(text, color = Muted, modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), textAlign = TextAlign.Center)
 
 @Composable
-private fun Header(text: String) = Text(text, color = Gold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+private fun Header(text: String) {
+    val mark = LocalUi.current.headerMark
+    Text(if (mark.isNotEmpty()) "$mark  $text" else text, color = Gold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+}
 
 // ---------------- raiz ----------------
 
@@ -163,9 +180,12 @@ fun CompanionRoot(openSystem: String?, consumed: () -> Unit) {
     LaunchedEffect(openSystem) { if (openSystem != null) { selected = openSystem; Follows.selected = openSystem; consumed() } }
     val current = list.find { it.id == selected } ?: list.firstOrNull()
 
-    if (current == null || adding) AddScreen(canCancel = current != null, onCancel = { adding = false }) { inv ->
-        selected = inv.shareId; Follows.selected = inv.shareId; adding = false
-    } else SystemScreen(current, list, onSelect = { selected = it; Follows.selected = it }, onAdd = { adding = true })
+    // o app inteiro segue o visual de quem está no front no sistema escolhido
+    CompanionTheme(if (adding) Appearance() else current?.snapshot.look()) {
+        if (current == null || adding) AddScreen(canCancel = current != null, onCancel = { adding = false }) { inv ->
+            selected = inv.shareId; Follows.selected = inv.shareId; adding = false
+        } else SystemScreen(current, list, onSelect = { selected = it; Follows.selected = it }, onAdd = { adding = true })
+    }
 }
 
 // ---------------- adicionar sistema ----------------
@@ -195,7 +215,8 @@ private fun AddScreen(canCancel: Boolean, onCancel: () -> Unit, onAdded: (Invite
     }
     val scan = rememberLauncherForActivityResult(ScanContract()) { r -> r.contents?.let { tryAdd(it) } }
 
-    Scaffold(contentWindowInsets = WindowInsets.safeDrawing) { pad ->
+    Scaffold(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground, contentWindowInsets = WindowInsets.safeDrawing) { pad ->
+        ThemedBackground(Modifier.fillMaxSize())
         Column(
             Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -265,6 +286,8 @@ private fun SystemScreen(f: Followed, all: List<Followed>, onSelect: (String) ->
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
@@ -291,18 +314,23 @@ private fun SystemScreen(f: Followed, all: List<Followed>, onSelect: (String) ->
                         if (refreshing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Icon(Icons.Filled.Refresh, "Atualizar")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Card),
+                colors = LocalExtra.current.let { ex ->
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = ex.topBar, titleContentColor = ex.barContent, actionIconContentColor = ex.barContent, navigationIconContentColor = ex.barContent,
+                    )
+                },
             )
         },
         bottomBar = {
-            if (sections.size > 1) NavigationBar(containerColor = Field) {
+            if (sections.size > 1) NavigationBar(containerColor = LocalExtra.current.bottomBar, contentColor = LocalExtra.current.barContent) {
                 sections.forEach { sec ->
                     NavigationBarItem(tab == sec.key, { tab = sec.key }, icon = { Icon(sec.icon, null) }, label = { Text(sec.label) },
-                        colors = NavigationBarItemDefaults.colors(selectedIconColor = Gold, indicatorColor = Color(0xFF384048)))
+                        colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.primary, indicatorColor = MaterialTheme.colorScheme.secondaryContainer))
                 }
             }
         },
     ) { pad ->
+        ThemedBackground(Modifier.fillMaxSize())
         LazyColumn(Modifier.padding(pad).fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (f.revoked) item { Banner("O sistema removeu seu acesso ou gerou um novo convite. Peça um novo QR code se precisar.") }
             f.error?.let { item { Banner("Não consegui atualizar: $it") } }
@@ -318,6 +346,7 @@ private fun SystemScreen(f: Followed, all: List<Followed>, onSelect: (String) ->
                 "people" -> peopleItems(s) { person = it }
                 else -> moreItems(s, now, ctx)
             }
+            if (s?.canMessage == true && tab == "front") item { SendMessageCard(f) }
         }
     }
     if (confirmRemove) AlertDialog(
@@ -487,3 +516,38 @@ private fun Block(title: String, text: String) {
     }
 }
 
+
+/** Recado do companion para o sistema (chega no Plurali, com notificação). */
+@Composable
+private fun SendMessageCard(f: Followed) {
+    val scope = rememberCoroutineScope()
+    var text by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    val ui = LocalUi.current
+    Column(
+        Modifier.padding(top = 12.dp).fillMaxWidth()
+            .themedCard(ui, MaterialTheme.colorScheme.surfaceContainer, null, MaterialTheme.colorScheme.outline, MaterialTheme.colorScheme.onSurface)
+            .padding(start = 14.dp, end = 14.dp, top = 14.dp + ui.cardTopExtra, bottom = 14.dp + ui.cardBottomExtra),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.MarkEmailUnread, null, tint = Gold)
+            Spacer(Modifier.width(8.dp))
+            Text("Mandar recado para o sistema", style = MaterialTheme.typography.titleMedium)
+        }
+        OutlinedTextField(text, { text = it; msg = null }, placeholder = { Text("Ex.: chego às 19h; estou pensando em vocês") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(msg ?: "Chega no Plurali com uma notificação.", style = MaterialTheme.typography.bodySmall,
+                color = if (msg?.startsWith("Erro") == true) MaterialTheme.colorScheme.error else Muted, modifier = Modifier.weight(1f))
+            Button(enabled = text.isNotBlank() && !busy, onClick = {
+                busy = true
+                scope.launch {
+                    val err = withContext(Dispatchers.IO) { Poller.sendMessage(f, text.trim()) }
+                    busy = false
+                    if (err == null) { text = ""; msg = "Recado enviado ✓" } else msg = "Erro: $err"
+                }
+            }) { Text(if (busy) "Enviando…" else "Enviar") }
+        }
+    }
+}
