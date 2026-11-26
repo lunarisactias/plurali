@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
         PluraliApplication.ensure(this)
         handle(intent)
         com.plurali.app.sys.CompanionInbox.schedule(this)
+        com.plurali.shared.Push.ensure(this)
         setContent {
             val app = currentAppearance()
             val dark = app.isDark()

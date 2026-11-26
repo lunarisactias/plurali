@@ -104,8 +104,12 @@ object Store {
     fun upsertCompanion(c: CompanionProfile) = update { it.copy(companions = it.companions.upsert(c) { x -> x.id }) }
     fun deleteCompanion(id: String) {
         data.value.companions.find { it.id == id }?.let { Prefs.addPendingDelete(it.shareId) }
-        update { d -> d.copy(companions = d.companions.filterNot { it.id == id }) }
+        // troca a chave das fotos: quem saiu não abre as fotos novas, e as antigas são apagadas do Firebase
+        update { d -> d.copy(companions = d.companions.filterNot { it.id == id }, mediaKey = null) }
     }
+
+    /** Depois de gerar um convite novo (corta o acesso antigo): troca também a chave das fotos. */
+    fun rotateMediaKey() = update { it.copy(mediaKey = null) }
 
     private fun write(text: String) {
         try {

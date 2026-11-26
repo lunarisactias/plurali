@@ -22,7 +22,7 @@ data class SnapPerson(
     val pronouns: String = "",
     val role: String = "",
     val color: Long = 0xFF7E57C2,
-    val avatar: String? = null, // jpeg pequeno em base64
+    val avatar: String? = null, // "m:<id>" (foto guardada à parte) ou, em versões antigas, jpeg em base64
     val description: String = "",
     val comfort: String = "",
     val likes: String = "",
@@ -31,7 +31,7 @@ data class SnapPerson(
     val fields: List<SnapField> = emptyList(),
     val wishlist: List<SnapWish>? = null, // null = não compartilhada
     val intro: String = "", // apresentação escrita para pessoas de fora
-    val banner: String? = null, // capa (jpeg em base64)
+    val banner: String? = null, // capa: "m:<id>" ou jpeg em base64
     val groups: List<String> = emptyList(),
     val relations: List<SnapRelation> = emptyList(),
 )
@@ -95,12 +95,20 @@ data class Snapshot(
     val history: List<SnapHistory>? = null,
     val canMessage: Boolean = false,   // o companion pode mandar recados para o sistema
     val appearance: String? = null,    // tema de quem está no front (JSON da aparência), para o companion seguir
+    val mediaKey: String? = null,      // chave das fotos (guardadas uma vez por sistema em shares/m-<id>)
+    val push: String? = null,          // endereço ntfy do Plurali: o companion avisa por ele quando manda recado
 ) {
+    /** Todas as fotos (referências "m:<id>") que este pacote usa. */
+    fun mediaIds(): Set<String> = buildSet {
+        front?.forEach { Media.idOf(it.avatar)?.let(::add) }
+        people?.forEach { p -> Media.idOf(p.avatar)?.let(::add); Media.idOf(p.banner)?.let(::add) }
+    }
+
     /** Chave usada para perceber que o front mudou. */
     fun frontKey(): String = front?.map { it.name }?.sorted()?.joinToString("|") ?: ""
 
     fun toJson(): String {
-        val o = JSONObject().put("v", 1).put("systemName", systemName).put("profileName", profileName).put("generatedAt", generatedAt)
+        val o = JSONObject().put("v", 2).put("systemName", systemName).put("profileName", profileName).put("generatedAt", generatedAt)
         front?.let { l ->
             o.put("front", JSONArray(l.map { f ->
                 JSONObject().put("personId", f.personId ?: JSONObject.NULL).put("name", f.name).put("pronouns", f.pronouns)
@@ -147,6 +155,8 @@ data class Snapshot(
         }
         o.put("canMessage", canMessage)
         appearance?.let { o.put("appearance", it) }
+        mediaKey?.let { o.put("mediaKey", it) }
+        push?.let { o.put("push", it) }
         history?.let { l ->
             o.put("history", JSONArray(l.map { h ->
                 JSONObject().put("name", h.name).put("color", h.color).put("start", h.start).put("end", h.end ?: JSONObject.NULL).put("personId", h.personId ?: JSONObject.NULL)
@@ -200,6 +210,8 @@ data class Snapshot(
                 history = o.list("history") { SnapHistory(it.s("name"), it.optLong("color"), it.optLong("start"), it.lN("end"), it.sN("personId")) },
                 canMessage = o.optBoolean("canMessage"),
                 appearance = o.sN("appearance"),
+                mediaKey = o.sN("mediaKey"),
+                push = o.sN("push"),
             )
         }
     }
@@ -222,4 +234,18 @@ object Inbox {
         val a = org.json.JSONArray(s)
         (0 until a.length()).map { a.getJSONObject(it) }.map { Msg(it.getString("id"), it.optString("text"), it.optLong("time")) }
     }.getOrDefault(emptyList())
+}
+
+/**
+ * Fotos do pacote, guardadas uma vez por sistema (e não uma cópia por companion):
+ * shares/m-<id> = { owner, kind: "media", data: base64(AES-GCM do JPEG) }, com a chave de fotos do sistema,
+ * que vai dentro do pacote de cada companion. Ao tirar um companion, o Plurali troca a chave e reenvia as fotos.
+ */
+object Media {
+    const val PREFIX = "m:"
+    fun path(id: String) = "shares/m-$id"
+    fun ref(id: String) = PREFIX + id
+    fun idOf(ref: String?): String? = ref?.takeIf { it.startsWith(PREFIX) }?.removePrefix(PREFIX)?.takeIf { it.matches(Regex("[0-9a-f]{32}")) }
+    /** O mesmo JPEG com a mesma chave sempre dá o mesmo id (não reenvia o que não mudou). */
+    fun idFor(jpeg: ByteArray, key: String) = ShareCrypto.sha256("plurali-media|$key|" + ShareCrypto.sha256(jpeg)).take(32)
 }

@@ -82,6 +82,11 @@ object CloudBackupSync {
                 Prefs.setCloudBackupResult(now, null, Prefs.cloudBackupSize, hash)
                 return null
             }
+            if (b.target == "drive") {
+                val size = uploadDrive(ctx, DriveBackup.token(ctx), b.code, text, now)
+                Prefs.setCloudBackupResult(now, null, size, hash)
+                return null
+            }
             val fb = CompanionSync.client(cloud)
             fb.token()
             val uid = fb.uid ?: error("sem sessão")
@@ -110,6 +115,7 @@ object CloudBackupSync {
             null
         } catch (e: Throwable) {
             val msg = when {
+                e is DriveBackup.NeedsConsent -> "Toque em “Enviar backup agora” para autorizar o Google Drive de novo."
                 e is FirebaseError && (e.code == 401 || e.code == 403) ->
                     "O Firebase recusou o envio. Se este código veio de outro aparelho, gere um código novo."
                 e is OutOfMemoryError -> "Backup grande demais para a memória do aparelho"
@@ -149,6 +155,43 @@ object CloudBackupSync {
         Prefs.forgetCloudBackup()
         PluraliApplication.ensure(ctx)
         schedule(ctx)
+    }
+
+    // ---------------- Google Drive ----------------
+
+    private val MAGIC = "PLB1".toByteArray()
+
+    /** Envia uma cópia ao Drive e deixa só as 2 mais recentes. Retorna o tamanho enviado. */
+    fun uploadDrive(ctx: Context, token: String, code: String, text: String, now: Long = System.currentTimeMillis()): Int {
+        val d = Store.data.value
+        val bytes = MAGIC + ShareCrypto.sealRaw(ShareCrypto.gzip(text.toByteArray()), keyOf(code))
+        val props = mapOf(
+            "time" to now.toString(), "members" to d.members.size.toString(),
+            "device" to (Build.MANUFACTURER + " " + Build.MODEL).take(60),
+            "code" to ShareCrypto.sha256("plurali-backup-check|" + normalize(code)).take(12), // para achar as cópias deste código
+        )
+        DriveBackup.upload(token, DriveBackup.PREFIX + now + ".plb", bytes, props)
+        runCatching { DriveBackup.list(token).drop(2).forEach { DriveBackup.delete(token, it.id) } }
+        return bytes.size
+    }
+
+    fun driveFiles(token: String) = DriveBackup.list(token)
+
+    /** Baixa e abre uma cópia do Drive (sem aplicar). */
+    fun downloadDrive(token: String, id: String, code: String): String {
+        val all = DriveBackup.download(token, id)
+        if (all.size < MAGIC.size || !all.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)) error("Arquivo de backup desconhecido")
+        val gz = runCatching { ShareCrypto.openRaw(all.copyOfRange(MAGIC.size, all.size), keyOf(code)) }.getOrNull()
+            ?: error("Não consegui abrir: o código está errado?")
+        return ShareCrypto.gunzip(gz).decodeToString()
+    }
+
+    /** Apaga todas as cópias do Drive (ao desligar ou trocar de código). */
+    fun deleteDrive(ctx: Context) {
+        runCatching {
+            val t = DriveBackup.token(ctx)
+            DriveBackup.list(t).forEach { DriveBackup.delete(t, it.id) }
+        }
     }
 
     /** Apaga as cópias deste código do Firebase (ao trocar de código ou desligar). */

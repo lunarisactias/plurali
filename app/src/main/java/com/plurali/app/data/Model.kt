@@ -298,7 +298,8 @@ data class BodyEntry(val id: String, val section: String, val label: String, val
 data class Vault(val salt: String, val iv: String, val data: String)
 
 /** Backup automático criptografado no Firebase. O código é a única forma de restaurar em outro aparelho. */
-data class CloudBackup(val code: String, val enabled: Boolean = true, val freq: String = "6h", val wifiOnly: Boolean = true)
+/** target: "drive" (Google Drive da pessoa) ou "firebase" (versões antigas: cópia no Firebase do Plurali). */
+data class CloudBackup(val code: String, val enabled: Boolean = true, val freq: String = "6h", val wifiOnly: Boolean = true, val target: String = "drive")
 
 
 /** Recado para quem entrar no front depois. targetId = um membro específico (null = quem entrar primeiro). */
@@ -367,6 +368,7 @@ data class AppData(
     val diary: List<DiaryEntry> = emptyList(),
     val companionMessages: List<CompanionMessage> = emptyList(),
     val lastSeen: Map<String, Long> = emptyMap(), // membro -> última vez que usou o app (para "O que eu perdi?")
+    val mediaKey: String? = null, // chave das fotos enviadas aos companions (trocada ao tirar alguém)
 ) {
     val loginsEnabled get() = adminPassword != null
 }

@@ -52,9 +52,7 @@ private val PPron: Color @Composable get() = MaterialTheme.colorScheme.tertiary
 private val PGreen = Color(0xFF66BB6A)
 private val pt = Locale("pt", "BR")
 
-private fun b64Image(b64: String?): ImageBitmap? = b64?.let {
-    runCatching { Base64.decode(it, Base64.NO_WRAP).let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() } }.getOrNull()
-}
+private fun b64Image(ref: String?): ImageBitmap? = MediaCache.bitmap(ref)?.asImageBitmap()
 
 private fun dur(ms: Long): String {
     val m = maxOf(0, ms) / 60_000
@@ -120,7 +118,7 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
         LazyColumn(Modifier.padding(pad).fillMaxSize(), state = remember(p.id) { LazyListState() }, contentPadding = PaddingValues(bottom = 24.dp)) {
             // ---------- cabeçalho: capa + foto + nome ----------
             item {
-                val banner = remember(p.banner) { b64Image(p.banner) }
+                val banner = remember(p.banner, MediaCache.version) { b64Image(p.banner) }
                 Box(Modifier.fillMaxWidth().height(200.dp)) {
                     if (banner != null) Image(banner, null, Modifier.fillMaxWidth().height(150.dp), contentScale = ContentScale.Crop)
                     else Box(
@@ -278,7 +276,7 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
 
 @Composable
 private fun BigAvatar(name: String, color: Long, b64: String?, size: Dp) {
-    val bmp = remember(b64) { b64Image(b64) }
+    val bmp = remember(b64, MediaCache.version) { b64Image(b64) }
     val ui = com.plurali.app.ui.theme.LocalUi.current
     val ears = ui.avatarId == "cat" || ui.avatarId == "bunny"
     Box(Modifier.size(size).clip(ui.avatarShape).background(Color(color)), contentAlignment = Alignment.Center) {

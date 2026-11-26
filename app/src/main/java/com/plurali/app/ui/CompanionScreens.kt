@@ -133,6 +133,12 @@ fun CompanionsScreen(nav: NavHostController) {
                     }) { Icon(Icons.Filled.Sync, null); Spacer(Modifier.width(6.dp)); Text(if (busy) "Enviando…" else "Enviar tudo agora") }
                 }
             }
+            if (d.cloud != null && d.companions.isNotEmpty()) item {
+                com.plurali.shared.PushSettings(
+                    "o recado de um companion", "os recados dos companions são conferidos a cada 1 h",
+                    Modifier.fillMaxWidth().themed().padding(12.dp),
+                )
+            }
             if (d.cloud != null && d.companions.isEmpty()) item { EmptyHint("Nenhum companion ainda. Toque em “Novo companion”.") }
             items(d.companions, key = { it.id }) { c ->
                 val synced = Prefs.companionSynced(c.id)
@@ -380,6 +386,8 @@ fun CompanionEditScreen(nav: NavHostController, id: String) {
         Prefs.addPendingDelete(c.shareId)
         Prefs.forgetCompanionHash(c.id)
         c = c.copy(shareId = ShareCrypto.newShareId(), key = ShareCrypto.newKey())
+        Prefs.setCompanionPush(c.id, null) // o endereço de aviso vem de novo do companion, pelo convite novo
+        Store.rotateMediaKey() // quem tinha o convite antigo também perde as fotos
         save()
     }
     if (confirmDelete) ConfirmDialog(

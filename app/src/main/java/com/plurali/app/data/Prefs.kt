@@ -93,6 +93,17 @@ object Prefs {
     fun addPendingDelete(shareId: String) { sp.edit().putStringSet("cdel", pendingDeletes() + shareId).apply() }
     fun removePendingDelete(shareId: String) { sp.edit().putStringSet("cdel", pendingDeletes() - shareId).apply() }
 
+    /** Fotos já enviadas ao Firebase (ids de shares/m-<id>), para não reenviar e apagar as que saíram de uso. */
+    fun mediaUploaded(): Set<String> = sp.getStringSet("media", emptySet()) ?: emptySet()
+    fun setMediaUploaded(s: Set<String>) { sp.edit().putStringSet("media", s.toSet()).apply() }
+    /** Para qual Firebase/sessão as fotos foram enviadas (se mudar, reenvia tudo). */
+    fun mediaDest(): String? = sp.getString("mediaDest", null)
+    fun setMediaDest(s: String) { sp.edit().putString("mediaDest", s).apply() }
+
+    /** Endereço ntfy de cada companion (vem do próprio companion, pelo Firebase): para avisar na hora que algo mudou. */
+    fun companionPush(id: String): String? = sp.getString("cp_$id", null)
+    fun setCompanionPush(id: String, e: String?) { sp.edit().apply { if (e == null) remove("cp_$id") else putString("cp_$id", e) }.apply() }
+
     // ---------- backup na nuvem ----------
     var lastCloudBackup by mutableLongStateOf(0L)
         private set

@@ -21,6 +21,11 @@ class PluraliApplication : Application() {
             Store.init(app)
             Notifier.channels(app)
             if (Store.onChange == null) Store.onChange = { Effects.onChange(app) }
+            // avisos instantâneos (ntfy): um companion mandou recado / mudou o endereço de aviso
+            com.plurali.shared.Push.onPing = { c -> CompanionInbox.now(c) }
+            com.plurali.shared.Push.onEndpoint = { c -> CompanionSync.request(c); CompanionInbox.schedule(c, replace = true) }
+            com.plurali.shared.Push.notifIcon = com.plurali.app.R.drawable.ic_stat_plurali
+            com.plurali.shared.Push.openApp = { c -> android.content.Intent(c, com.plurali.app.MainActivity::class.java).putExtra("route", "companions") }
             // usa o projeto Firebase do Plurali (troca também a configuração do simulador de testes)
             val c = Store.data.value.cloud
             if (c == null || c.dbUrl.startsWith("http://")) {

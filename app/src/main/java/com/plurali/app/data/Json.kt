@@ -124,7 +124,7 @@ object Json {
                     .put("fieldIds", p.fieldIds.ja { it })
                     .put("history", p.history).put("safety", p.safety).put("body", p.body).put("intro", p.intro))
         })
-        .put("cloudBackup", d.cloudBackup?.let { JSONObject().put("code", it.code).put("enabled", it.enabled).put("freq", it.freq).put("wifiOnly", it.wifiOnly) } ?: JSONObject.NULL)
+        .put("cloudBackup", d.cloudBackup?.let { JSONObject().put("code", it.code).put("enabled", it.enabled).put("freq", it.freq).put("wifiOnly", it.wifiOnly).put("target", it.target) } ?: JSONObject.NULL)
         .put("appearance", JSONObject().also { ap -> d.appearance.forEach { (k, a) -> ap.put(k, encodeAppearance(a)) } })
         .put("frontNotes", d.frontNotes.ja { n ->
             JSONObject().put("id", n.id).putN("authorId", n.authorId).put("text", n.text).put("createdAt", n.createdAt)
@@ -149,6 +149,7 @@ object Json {
             JSONObject().put("id", m.id).put("companionId", m.companionId).put("text", m.text).put("time", m.time).put("read", m.read)
         })
         .put("lastSeen", d.lastSeen.jo())
+        .put("mediaKey", d.mediaKey ?: JSONObject.NULL)
 
     private fun encodeMember(m: Member): JSONObject =
         JSONObject().put("id", m.id).put("name", m.name).put("pronouns", m.pronouns)
@@ -300,7 +301,7 @@ object Json {
                 )
             },
             cloudBackup = o.optJSONObject("cloudBackup")?.let {
-                CloudBackup(it.s("code"), it.optBoolean("enabled", true), it.s("freq").ifBlank { "6h" }, it.optBoolean("wifiOnly", true))
+                CloudBackup(it.s("code"), it.optBoolean("enabled", true), it.s("freq").ifBlank { "6h" }, it.optBoolean("wifiOnly", true), it.s("target").ifBlank { "firebase" }) // sem o campo = backup antigo no Firebase
             }?.takeIf { it.code.isNotBlank() },
             appearance = o.optJSONObject("appearance")?.let { ap -> ap.keys().asSequence().associateWith { decodeAppearance(ap.getJSONObject(it)) } } ?: emptyMap(),
             frontNotes = o.arr("frontNotes") { FrontNote(it.s("id"), it.sN("authorId"), it.s("text"), it.optLong("createdAt"), it.sN("targetId"), it.sN("doneById"), it.lN("doneAt")) },
@@ -317,6 +318,7 @@ object Json {
             diary = o.arr("diary") { DiaryEntry(it.s("id"), it.sN("authorId"), it.optLong("time"), it.s("text"), it.strs("images")) },
             companionMessages = o.arr("companionMessages") { CompanionMessage(it.s("id"), it.s("companionId"), it.s("text"), it.optLong("time"), it.optBoolean("read")) },
             lastSeen = o.lmap("lastSeen"),
+            mediaKey = o.optString("mediaKey").takeIf { it.isNotBlank() && it != "null" },
         )
     }
 

@@ -130,9 +130,7 @@ private fun rememberNow(): Long {
 
 @Composable
 private fun Avatar(name: String, color: Long, b64: String?, size: Dp) {
-    val bmp: ImageBitmap? = remember(b64) {
-        b64?.let { runCatching { Base64.decode(it, Base64.NO_WRAP).let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() } }.getOrNull() }
-    }
+    val bmp: ImageBitmap? = remember(b64, MediaCache.version) { MediaCache.bitmap(b64)?.asImageBitmap() }
     val ui = LocalUi.current
     val ears = ui.avatarId == "cat" || ui.avatarId == "bunny"
     Box(Modifier.size(size).clip(ui.avatarShape).background(Color(color)), contentAlignment = Alignment.Center) {
@@ -386,11 +384,36 @@ private fun androidx.compose.foundation.lazy.LazyListScope.frontItems(s: Snapsho
             }
         }
     }
-    item {
-        Text(
-            "Você recebe uma notificação quando o front muda (o app confere a cada ~15 minutos).",
-            style = MaterialTheme.typography.bodySmall, color = Muted, modifier = Modifier.padding(top = 12.dp),
-        )
+    item { FrontAlerts() }
+}
+
+/** Como chegam os avisos de troca de front: na hora (ntfy) ou conferindo a cada 15 min. */
+@Composable
+private fun FrontAlerts() {
+    val ctx = LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    var tick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(2000); tick++ } }
+    @Suppress("UNUSED_EXPRESSION") tick
+    val active = Push.active(ctx)
+    Column(Modifier.padding(top = 12.dp).fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (active) "Você recebe uma notificação na hora em que o front muda."
+                else "Você recebe uma notificação quando o front muda (o app confere a cada ~15 minutos).",
+                style = MaterialTheme.typography.bodySmall, color = Muted, modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { open = !open }) { Text(if (open) "Fechar" else if (active) "Ajustar" else "Avisar na hora") }
+        }
+        if (open) {
+            val ui = LocalUi.current
+            PushSettings(
+                "a troca de front", "o app confere a cada ~15 minutos",
+                Modifier.padding(top = 6.dp).fillMaxWidth()
+                    .themedCard(ui, MaterialTheme.colorScheme.surfaceContainer, null, MaterialTheme.colorScheme.outline, MaterialTheme.colorScheme.onSurface)
+                    .padding(start = 14.dp, end = 14.dp, top = 12.dp + ui.cardTopExtra, bottom = 12.dp + ui.cardBottomExtra),
+            )
+        }
     }
 }
 
@@ -520,6 +543,7 @@ private fun Block(title: String, text: String) {
 /** Recado do companion para o sistema (chega no Plurali, com notificação). */
 @Composable
 private fun SendMessageCard(f: Followed) {
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -543,7 +567,7 @@ private fun SendMessageCard(f: Followed) {
             Button(enabled = text.isNotBlank() && !busy, onClick = {
                 busy = true
                 scope.launch {
-                    val err = withContext(Dispatchers.IO) { Poller.sendMessage(f, text.trim()) }
+                    val err = withContext(Dispatchers.IO) { Poller.sendMessage(ctx, f, text.trim()) }
                     busy = false
                     if (err == null) { text = ""; msg = "Recado enviado ✓" } else msg = "Erro: $err"
                 }

@@ -12,8 +12,8 @@ android {
         applicationId = "com.plurali.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.10"
+        versionCode = 11
+        versionName = "1.11"
     }
 
     buildTypes {
@@ -47,4 +47,6 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation(project(":shared"))
     implementation("com.google.zxing:core:3.5.3")
+    // backup no Google Drive (pasta oculta do app): só a autorização; o envio é pela API REST
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 }

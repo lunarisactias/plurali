@@ -50,7 +50,7 @@ object CompanionSync {
     /** Pede um envio (espera 3 s para juntar alterações; precisa de internet; tenta de novo se falhar). */
     fun request(ctx: Context) {
         val d = Store.data.value
-        if (d.cloud == null || (d.companions.isEmpty() && Prefs.pendingDeletes().isEmpty())) return
+        if (d.cloud == null || (d.companions.isEmpty() && Prefs.pendingDeletes().isEmpty() && Prefs.mediaUploaded().isEmpty())) return
         WorkManager.getInstance(ctx).enqueueUniqueWork(
             WORK, ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<CompanionSyncWorker>()
@@ -72,19 +72,49 @@ object CompanionSync {
             Prefs.pendingDeletes().forEach { sid ->
                 runCatching { fb.delete("shares/$sid") }.onSuccess { Prefs.removePendingDelete(sid) }
             }
-            d.companions.forEach { c ->
-                val snap = build(ctx, d, c)
+            val dest = ShareCrypto.sha256(cloud.dbUrl + "|" + uid).take(16)
+            if (Prefs.mediaDest() != dest) { Prefs.setMediaUploaded(emptySet()); Prefs.setMediaDest(dest) }
+            if (d.companions.isNotEmpty()) ensureMediaKey()
+            val cur = Store.data.value
+            val key = cur.mediaKey
+
+            // 1) monta o pacote de cada companion, juntando as fotos usadas (uma vez só, mesmo que vários usem)
+            val media = mutableMapOf<String, ByteArray>()
+            val snaps = cur.companions.map { c -> c to build(ctx, cur, c, media) }
+
+            // 2) envia só as fotos novas
+            val uploaded = Prefs.mediaUploaded().toMutableSet()
+            if (key != null) for ((id, bytes) in media) {
+                if (!force && id in uploaded) continue
+                fb.put(
+                    Media.path(id),
+                    JSONObject().put("owner", uid).put("v", 1).put("kind", "media")
+                        .put("data", ShareCrypto.sealBytes(bytes, key)).toString(),
+                )
+                uploaded += id
+                Prefs.setMediaUploaded(uploaded)
+            }
+
+            // 3) envia os pacotes que mudaram e avisa o companion na hora (se ele tiver avisos instantâneos)
+            for ((c, snap) in snaps) {
                 // inclui o destino: se o projeto Firebase mudar, tudo é reenviado
                 val hash = ShareCrypto.sha256(snap.copy(generatedAt = 0).toJson() + c.key + c.shareId + cloud.dbUrl + uid)
                 if (force || Prefs.companionHash(c.id) != hash) {
                     val body = JSONObject()
                         .put("owner", uid)
-                        .put("v", 1)
+                        .put("v", 2)
                         .put("updated", JSONObject().put(".sv", "timestamp"))
                         .put("data", ShareCrypto.seal(snap.toJson(), c.key))
                     fb.put("shares/${c.shareId}", body.toString())
                     Prefs.setCompanionSynced(c.id, hash, System.currentTimeMillis())
+                    Push.send(Prefs.companionPush(c.id))
                 }
+            }
+
+            // 4) apaga as fotos que ninguém usa mais (inclusive as da chave antiga, depois de tirar alguém)
+            for (id in uploaded.toList()) {
+                if (id in media) continue
+                runCatching { fb.delete(Media.path(id)) }.onSuccess { uploaded -= id; Prefs.setMediaUploaded(uploaded) }
             }
             Prefs.putCompanionError(null)
             null
@@ -112,10 +142,14 @@ object CompanionSync {
 
     // ---------------- montagem do que o companion vê ----------------
 
-    private fun thumb(ctx: Context, path: String?, width: Int = 128, quality: Int = 70): String? = runCatching {
-        if (path == null) return null
+    /** Miniaturas já prontas (arquivo + largura + data de modificação -> JPEG), para não refazer a cada envio. */
+    private val thumbCache = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+
+    private fun thumbBytes(ctx: Context, path: String, width: Int, quality: Int): ByteArray? = runCatching {
         val f = File(ctx.filesDir, path)
         if (!f.exists()) return null
+        val ck = "$path|$width|$quality|${f.lastModified()}|${f.length()}"
+        thumbCache[ck]?.let { return it }
         val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(f.path, o)
         var ss = 1
@@ -125,10 +159,33 @@ object CompanionSync {
         val sc = Bitmap.createScaledBitmap(b, w, max(1, w * b.height / max(1, b.width)), true)
         val out = ByteArrayOutputStream()
         sc.compress(Bitmap.CompressFormat.JPEG, quality, out)
-        Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        out.toByteArray().also { thumbCache[ck] = it }
     }.getOrNull()
 
-    fun build(ctx: Context, d: AppData, c: CompanionProfile): Snapshot {
+    /**
+     * Foto para o pacote: vira uma referência "m:<id>"; o JPEG vai à parte (uma vez por sistema, não por companion).
+     * [media] junta os JPEGs usados, para o envio.
+     */
+    private fun mediaRef(ctx: Context, path: String?, key: String, media: MutableMap<String, ByteArray>?, width: Int = 128, quality: Int = 70): String? {
+        if (path == null) return null
+        val bytes = thumbBytes(ctx, path, width, quality) ?: return null
+        val id = Media.idFor(bytes, key)
+        media?.put(id, bytes)
+        return Media.ref(id)
+    }
+
+    /** Chave das fotos do sistema (cria se ainda não existe ou se foi trocada ao tirar um companion). */
+    private fun ensureMediaKey(): String {
+        Store.data.value.mediaKey?.let { return it }
+        val k = ShareCrypto.newKey()
+        Store.update(notify = false) { if (it.mediaKey == null) it.copy(mediaKey = k) else it }
+        return Store.data.value.mediaKey ?: k
+    }
+
+    /** [media] != null: envio de verdade (junta as fotos). null: só uma prévia na tela (não grava nada). */
+    fun build(ctx: Context, d: AppData, c: CompanionProfile, media: MutableMap<String, ByteArray>? = null): Snapshot {
+        val mk = d.mediaKey ?: "previa"
+        fun thumb(path: String?, width: Int = 128, quality: Int = 70) = mediaRef(ctx, path, mk, media, width, quality)
         val p = c.perms
         val visible: Set<String> = (p.memberIds?.toSet() ?: d.members.filter { !it.archived }.map { it.id }.toSet())
             .filter { id -> d.members.any { it.id == id && !it.archived } }.toSet()
@@ -141,7 +198,7 @@ object CompanionSync {
             when {
                 m != null && m.id in visible -> SnapFront(
                     m.id, m.name, if (p.pronouns) m.pronouns else "", m.color,
-                    if (p.avatars) thumb(ctx, m.avatar) else null, false, e.start, if (p.frontStatus) e.status else "",
+                    if (p.avatars) thumb(m.avatar) else null, false, e.start, if (p.frontStatus) e.status else "",
                 )
                 m != null -> SnapFront(null, hidden, "", 0xFF78909C, null, false, e.start)
                 cf != null && p.customFronts -> SnapFront(null, cf.name, "", cf.color, null, true, e.start, if (p.frontStatus) e.status else "")
@@ -177,7 +234,7 @@ object CompanionSync {
                 pronouns = if (p.pronouns) m.pronouns else "",
                 role = if (p.roles) m.role else "",
                 color = m.color,
-                avatar = if (p.avatars) thumb(ctx, m.avatar) else null,
+                avatar = if (p.avatars) thumb(m.avatar) else null,
                 description = if (p.description) m.description else "",
                 comfort = if (p.comfort) m.comfort else "",
                 likes = if (p.likes) m.likes else "",
@@ -188,7 +245,7 @@ object CompanionSync {
                 intro = if (p.intro) m.intro else "",
                 wishlist = if (!p.wishlist) null else m.wishlist.sortedWith(compareBy({ it.done }, { -it.createdAt }))
                     .map { SnapWish(it.kind, it.text, it.note, it.done) },
-                banner = if (p.banner) m.banner?.let { thumb(ctx, it, width = 540, quality = 60) } else null,
+                banner = if (p.banner) m.banner?.let { thumb(it, width = 540, quality = 60) } else null,
                 groups = if (!p.groups) emptyList() else d.groups.filter { m.id in it.memberIds }
                     .map { (it.emoji + " " + it.name).trim() }.sorted(),
                 relations = if (!p.relations) emptyList() else d.relations.filter { it.a == m.id || it.b == m.id }.mapNotNull { r ->
@@ -225,6 +282,7 @@ object CompanionSync {
         return Snapshot(
             d.systemName.ifBlank { "Sistema" }, c.name, System.currentTimeMillis(), front, notices, events, people, safety, body, history,
             canMessage = p.messages, appearance = look?.let { AppearanceJson.encode(it).toString() },
+            mediaKey = d.mediaKey, push = Push.endpoint(ctx),
         )
     }
 }
@@ -237,17 +295,37 @@ class CompanionSyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWor
     }
 }
 
-/** Busca os recados que os companions mandaram (a cada 30 min e ao abrir a tela de companions). */
+/**
+ * Busca os recados que os companions mandaram e o endereço de aviso (ntfy) de cada um.
+ * Com avisos instantâneos ligados no Plurali, o companion avisa na hora e esta conferência periódica
+ * vira só uma garantia (a cada 12 h); sem eles, confere a cada 1 h. Também roda ao abrir a tela de companions.
+ */
 object CompanionInbox {
     private const val WORK = "companion-inbox"
+    private const val NOW = "companion-inbox-now"
 
-    fun schedule(ctx: Context) {
+    /** Quem precisa ser conferido: quem pode mandar recado, ou quem ainda não contou o endereço de aviso. */
+    private fun targets(d: AppData) = d.companions.filter { it.perms.messages || Prefs.companionPush(it.id) == null }
+
+    fun schedule(ctx: Context, replace: Boolean = false) {
         val wm = WorkManager.getInstance(ctx)
-        if (Store.data.value.companions.none { it.perms.messages }) { wm.cancelUniqueWork(WORK); return }
+        if (targets(Store.data.value).isEmpty()) { wm.cancelUniqueWork(WORK); return }
+        val hours = if (Push.active(ctx)) 12L else 1L
         wm.enqueueUniquePeriodicWork(
-            WORK, androidx.work.ExistingPeriodicWorkPolicy.KEEP,
-            androidx.work.PeriodicWorkRequestBuilder<CompanionInboxWorker>(30, TimeUnit.MINUTES)
+            WORK, if (replace) androidx.work.ExistingPeriodicWorkPolicy.UPDATE else androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            androidx.work.PeriodicWorkRequestBuilder<CompanionInboxWorker>(hours, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build(),
+        )
+    }
+
+    /** Um companion avisou (ntfy): confere agora. */
+    fun now(ctx: Context) {
+        WorkManager.getInstance(ctx).enqueueUniqueWork(
+            NOW, ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<CompanionInboxWorker>()
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build(),
         )
     }
@@ -260,16 +338,26 @@ object CompanionInbox {
         val fb = CompanionSync.client(cloud)
         val known = d.companionMessages.map { it.id }.toSet()
         val fresh = mutableListOf<CompanionMessage>()
-        for (c in d.companions.filter { it.perms.messages }) {
+        var newPush = false
+        for (c in targets(d)) {
+            var push: String? = null
             for (slot in 0 until Inbox.SLOTS) {
                 val raw = runCatching { fb.get(Inbox.path(c.shareId, c.key, slot)) }.getOrNull() ?: break
-                val plain = ShareCrypto.open(JSONObject(raw).optString("data"), c.key) ?: continue
+                val o = JSONObject(raw)
+                o.optString("push").takeIf { it.isNotBlank() }?.let { ShareCrypto.open(it, c.key) }?.let { push = it }
+                if (!c.perms.messages) continue
+                val plain = ShareCrypto.open(o.optString("data"), c.key) ?: continue
                 Inbox.decode(plain).forEach { m ->
                     val id = c.id + ":" + m.id
                     if (id !in known) fresh += CompanionMessage(id, c.id, m.text, m.time)
                 }
             }
+            if (push != null && push != Prefs.companionPush(c.id)) {
+                Prefs.setCompanionPush(c.id, push)
+                newPush = true
+            }
         }
+        if (newPush) schedule(ctx, replace = true) // talvez nem precise mais conferir alguns
         if (fresh.isNotEmpty()) {
             Store.addCompanionMessages(fresh)
             fresh.groupBy { it.companionId }.forEach { (cid, l) ->

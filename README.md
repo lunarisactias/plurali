@@ -12,7 +12,7 @@ Kotlin + Jetpack Compose. Os dados ficam só no aparelho (`files/data.json`, mai
 - **Quadro de mensagens** entre membros (com status lida/não lida) e **notas** por membro
 - **Enquetes** com voto por membro, abstenção/veto e comentários
 - **Backup**: exporta/importa um arquivo JSON (fotos incluídas) e **backup automático** diário/semanal numa pasta escolhida
-- **Backup na nuvem**: cópia automática (a cada 1h/6h/24h, só no Wi‑Fi se quiser) no Firebase do Plurali, criptografada de ponta a ponta com um código de 20 letras. Restaura em outro celular com o código; guarda as 2 últimas cópias
+- **Backup na nuvem**: cópia automática (a cada 1h/6h/24h, só no Wi‑Fi se quiser) numa **pasta oculta do Google Drive da própria pessoa**, criptografada de ponta a ponta com um código de 20 letras. Restaura em outro celular com a mesma conta Google e o código; guarda as 2 últimas cópias. Backups antigos no Firebase continuam funcionando e podem ser passados para o Drive com um toque
 - **Temas por perfil**: Clássico, Gatos, Jardim, Homem-Aranha, Coelhos, Inferno, Fadas, Exploração, Insetos, Desenho, Pássaros, Ladybug e Vento. Cada um muda cores, formato dos cartões e das fotos, contornos, enfeites e desenhos do fundo. Dá para ajustar cor, letras, tamanho, imagem de fundo e animação. A tela de login e alters novos usam o tema padrão; o tema da pessoa carrega ao entrar na conta
 - **Logins**: Sistema (admin, com código de recuperação), um por membro, e visitante sem login
 - **Conversas** diretas e em grupo (sem apagar; edição só no 1º minuto), com reações, fotos, fixadas e "visto"
@@ -45,6 +45,13 @@ pode **mandar recados para o sistema**, que chegam no Plurali com notificação.
   que só existe no Plurali e no convite/QR). O Google só guarda bytes embaralhados.
 - Cada companion tem um caminho aleatório `shares/<id>`; "Gerar novo convite" troca caminho e chave (corta o acesso);
   excluir o companion apaga os dados dele do Firebase.
+- **Avisos instantâneos** (opcional, nos dois apps) pelo [ntfy](https://ntfy.sh), gratuito e sem conta: quando algo muda, o outro lado
+  recebe um "mudou" (sem conteúdo nenhum, por um canal secreto) e só então baixa os dados criptografados. A troca de front chega no
+  Companion em segundos, e os recados chegam no Plurali na hora. Dá para receber pelo app ntfy (gasta quase nada de bateria) ou por
+  uma conexão própria (com notificação fixa). Sem isso, o Companion confere a cada 15 min e o Plurali a cada 1 h.
+- As **fotos** vão separadas do pacote, **uma vez por sistema** (não uma cópia por companion), com uma chave de fotos que vai dentro do
+  pacote de cada companion. O Companion baixa cada foto uma vez só e guarda. Ao excluir um companion ou gerar convite novo, a chave
+  das fotos é trocada, as fotos são reenviadas e as antigas apagadas.
 - Membros escondidos que entram no front aparecem como "Alguém do sistema". Campos privados e dados sensíveis nunca são enviados.
 
 O app já vem ligado ao projeto Firebase **plurali-8ffe7** (`FirebaseProject` em `Model.kt`): ninguém precisa configurar nada.
@@ -81,3 +88,16 @@ Os APKs ficam em `app\build\outputs\apk\release\app-release.apk` e `companion\bu
 
 O APK é assinado com a chave de debug deste PC (`%USERPROFILE%\.android\debug.keystore`).
 Guarde esse arquivo: só APKs assinados com a mesma chave instalam por cima da versão atual sem apagar os dados.
+
+### Uso do plano gratuito do Firebase
+O plano gratuito (Spark) tem 1 GB guardado e 10 GB baixados por mês, divididos entre todos os sistemas. Com o backup no Google Drive,
+as fotos separadas e os avisos pelo ntfy, cada sistema com 2 companions usa por volta de 1 MB guardado e 10 MB baixados por mês,
+o que dá para algo em torno de 700 a 1000 sistemas. Se o limite for atingido, o Firebase pausa até o mês seguinte
+(Companion e backup antigo param; os dados nos celulares não são afetados).
+
+### Backup no Google Drive (configuração única no Google Cloud)
+O app pede acesso só à pasta oculta do app no Drive (`drive.appdata`). No projeto **plurali-8ffe7** do Google Cloud precisa haver:
+1. **Google Drive API** ativada.
+2. **Tela de consentimento** (Google Auth Platform): nome "Plurali", público externo, publicada ("Em produção").
+3. **Cliente OAuth do tipo Android**: pacote `com.plurali.app` e o SHA-1 da chave que assina o APK
+   (`00:A4:EF:A3:40:59:C1:F8:30:46:53:97:FC:D7:31:44:EE:76:94:EA`).
