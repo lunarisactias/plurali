@@ -24,6 +24,7 @@ Kotlin + Jetpack Compose. Os dados ficam só no aparelho (`files/data.json`, mai
 - **Plano de segurança** acessível sem login e **"Sou novo aqui"** para novos alters
 - **Tela de entrada simples**: Login do Sistema · Entrar sem login · Entrar com meu perfil (a lista de perfis só aparece nessa última, com bolinha de mensagens não lidas)
 - **Mural de boas-vindas em grade**: textos e fotos (planta da casa, família…) lado a lado, com tamanho ajustável e foto em tela cheia com zoom
+- **Texto formatado** no mural de boas-vindas e no mural de avisos: negrito, itálico, sublinhado, riscado, cor da letra, marca-texto, letra grande/pequena e alinhamento
 - Campos com **visibilidade** (todos / só membros / privado), **busca** geral
 
 ## Plurali Companion (app para pessoas de fora do sistema)

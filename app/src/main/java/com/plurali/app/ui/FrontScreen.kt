@@ -257,7 +257,7 @@ private fun NoticeBoard(d: AppData, now: Long) {
                             if (n.pinned) { Icon(Icons.Filled.PushPin, "Fixado", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(4.dp)) }
                             if (n.title.isNotBlank()) Text(n.title, style = MaterialTheme.typography.titleSmall)
                         }
-                        if (n.text.isNotBlank()) Text(n.text, style = MaterialTheme.typography.bodyMedium)
+                        if (n.text.isNotBlank()) RichText(n.text, style = MaterialTheme.typography.bodyMedium)
                         Text(
                             "${d.subject(n.authorId)?.name ?: "Sistema"} · ${fmtWhen(n.time, now)}",
                             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -279,7 +279,7 @@ private fun NoticeBoard(d: AppData, now: Long) {
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(title, { title = it }, label = { Text("Título") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(text, { text = it }, label = { Text("Aviso") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                    RichTextField(text, { text = it }, "Aviso", Modifier.fillMaxWidth())
                     Row(Modifier.fillMaxWidth().clickable { pinned = !pinned }, verticalAlignment = Alignment.CenterVertically) {
                         Text("Fixar no topo", Modifier.weight(1f)); Switch(pinned, { pinned = it })
                     }

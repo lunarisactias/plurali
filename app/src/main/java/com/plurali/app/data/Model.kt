@@ -219,6 +219,7 @@ val DEFAULT_CONTACTS = listOf(
 data class WelcomeCard(
     val id: String, val title: String, val text: String, val color: Long = 0xFFD6AC5E,
     val image: String? = null, val size: Int = 6,
+    val align: String = "start", // alinhamento do texto: start | center | end
 )
 
 val SUGGESTED_WELCOME = listOf(

@@ -150,7 +150,7 @@ object CompanionSync {
         }.distinctBy { it.personId ?: (it.name + it.since) }
 
         val notices = if (!p.notices) null else d.notices.sortedWith(compareBy<Notice>({ !it.pinned }, { -it.time })).map {
-            SnapNotice(it.title, it.text, nameOf(it.authorId) ?: "Sistema", it.time, it.pinned, it.color)
+            SnapNotice(it.title, com.plurali.app.ui.Rich.strip(it.text), nameOf(it.authorId) ?: "Sistema", it.time, it.pinned, it.color)
         }
 
         val events: List<SnapEvent>? = if (!p.calendar) null else {

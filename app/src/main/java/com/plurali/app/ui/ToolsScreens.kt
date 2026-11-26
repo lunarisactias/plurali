@@ -257,7 +257,7 @@ fun SearchScreen(nav: NavHostController) {
         d.events.filter { has(it.title, it.description) }.forEach { e ->
             out += Hit("Calendário", e.title, fmtDate(e.start.toDate()), e.color, "calendar")
         }
-        d.notices.filter { has(it.title, it.text) }.forEach { n -> out += Hit("Mural", n.title.ifBlank { "Aviso" }, snip(n.text), n.color, "home") }
+        d.notices.filter { has(it.title, Rich.strip(it.text)) }.forEach { n -> out += Hit("Mural", n.title.ifBlank { "Aviso" }, snip(Rich.strip(n.text)), n.color, "home") }
         d.polls.filter { has(it.title, it.description) }.forEach { p -> out += Hit("Enquetes", p.title, if (p.isOpen()) "Aberta" else "Encerrada", 0xFFD6AC5E, "poll/${p.id}") }
         d.body.filter { has(it.label, it.value) }.forEach { b -> out += Hit("Corpo", b.label, b.value, 0xFF90A4AE, "body") }
         d.reminders.filter { has(it.title, it.text) }.forEach { r -> out += Hit("Lembretes", r.title, "%02d:%02d".format(r.hour, r.minute), 0xFFD6AC5E, "reminders") }

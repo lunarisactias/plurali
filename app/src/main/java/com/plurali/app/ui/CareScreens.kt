@@ -312,12 +312,13 @@ private fun WelcomeTile(w: WelcomeCard, n: Int, total: Int, modifier: Modifier, 
                     .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f), RoundedCornerShape(50)).padding(4.dp).size(16.dp),
             )
         }
-        if (w.title.isNotBlank() || w.text.isNotBlank() || w.image == null) Column(Modifier.padding(if (small) 10.dp else 16.dp)) {
-            if (total > 1) Text("$n de $total", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (w.title.isNotBlank()) Text(w.title, style = if (small) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge)
-            if (w.text.isNotBlank()) Text(
+        val ta = when (w.align) { "center" -> TextAlign.Center; "end" -> TextAlign.End; else -> TextAlign.Start }
+        if (w.title.isNotBlank() || w.text.isNotBlank() || w.image == null) Column(Modifier.fillMaxWidth().padding(if (small) 10.dp else 16.dp)) {
+            if (total > 1) Text("$n de $total", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = ta, modifier = Modifier.fillMaxWidth())
+            if (w.title.isNotBlank()) Text(w.title, style = if (small) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge, textAlign = ta, modifier = Modifier.fillMaxWidth())
+            if (w.text.isNotBlank()) RichText(
                 w.text, style = if (small) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(top = 4.dp),
+                textAlign = ta, modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
         }
     }
@@ -392,10 +393,22 @@ fun WelcomeScreen(nav: NavHostController?, onClose: (() -> Unit)?) {
                         Icon(Icons.Filled.AddPhotoAlternate, null); Spacer(Modifier.width(8.dp)); Text(if (busy) "Carregando…" else "Adicionar foto (opcional)")
                     }
                     OutlinedTextField(w.title, { edit = w.copy(title = it) }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(
-                        w.text, { edit = w.copy(text = it) }, label = { Text(if (w.image != null) "Legenda / texto" else "Texto") },
-                        minLines = 3, modifier = Modifier.fillMaxWidth(),
-                    )
+                    RichTextField(w.text, { edit = w.copy(text = it) }, if (w.image != null) "Legenda / texto" else "Texto", Modifier.fillMaxWidth())
+                    Text("Alinhamento", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(Triple("start", "Esquerda", Icons.Filled.FormatAlignLeft), Triple("center", "Centro", Icons.Filled.FormatAlignCenter), Triple("end", "Direita", Icons.Filled.FormatAlignRight)).forEach { (k, l, ic) ->
+                            val sel = w.align == k
+                            Column(
+                                Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                    .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    .clickable { edit = w.copy(align = k) }.padding(vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Icon(ic, null, tint = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(l, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
                     // tamanho, com desenho de quanto ocupa da largura
                     Text("Tamanho no mural", style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -81,7 +81,7 @@ object Json {
                 .put("time", n.time).put("pinned", n.pinned).put("color", n.color)
         })
         .put("welcome", d.welcome.ja { w ->
-            JSONObject().put("id", w.id).put("title", w.title).put("text", w.text).put("color", w.color).putN("image", w.image).put("size", w.size)
+            JSONObject().put("id", w.id).put("title", w.title).put("text", w.text).put("color", w.color).putN("image", w.image).put("size", w.size).put("align", w.align)
         })
         .put("notes", d.notes.ja { n ->
             JSONObject().put("id", n.id).put("memberId", n.memberId).put("title", n.title)
@@ -227,7 +227,7 @@ object Json {
                 Notice(it.s("id"), it.sN("authorId"), it.s("title"), it.s("text"), it.optLong("time"), it.optBoolean("pinned"), it.optLong("color", 0xFFD6AC5E))
             },
             welcome = o.arr("welcome") {
-                WelcomeCard(it.s("id"), it.s("title"), it.s("text"), it.optLong("color", 0xFFD6AC5E), it.sN("image"), it.optInt("size", 6).takeIf { s -> s in listOf(2, 3, 4, 6) } ?: 6)
+                WelcomeCard(it.s("id"), it.s("title"), it.s("text"), it.optLong("color", 0xFFD6AC5E), it.sN("image"), it.optInt("size", 6).takeIf { s -> s in listOf(2, 3, 4, 6) } ?: 6, it.s("align").ifBlank { "start" })
             },
             notes = o.arr("notes") { Note(it.s("id"), it.s("memberId"), it.s("title"), it.s("body"), it.optLong("time")) },
             polls = o.arr("polls") { p ->
