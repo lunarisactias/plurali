@@ -125,9 +125,11 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
                         Modifier.fillMaxWidth().height(150.dp)
                             .background(Brush.verticalGradient(listOf(color.copy(alpha = 0.85f), color.copy(alpha = 0.25f)))),
                     )
+                    // contorno com o mesmo formato da foto (que muda conforme o tema: círculo, orelhas, etc.)
                     Box(
                         Modifier.align(Alignment.BottomStart).padding(start = 16.dp)
-                            .border(4.dp, PBg, RoundedCornerShape(26.dp)).padding(4.dp),
+                            .size(116.dp).clip(com.plurali.app.ui.theme.LocalUi.current.avatarShape).background(PBg),
+                        contentAlignment = Alignment.Center,
                     ) { BigAvatar(p.name, p.color, p.avatar, 104.dp) }
                 }
             }
