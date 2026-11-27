@@ -103,6 +103,9 @@ object Prefs {
     /** Endereço ntfy de cada companion (vem do próprio companion, pelo Firebase): para avisar na hora que algo mudou. */
     fun companionPush(id: String): String? = sp.getString("cp_$id", null)
     fun setCompanionPush(id: String, e: String?) { sp.edit().apply { if (e == null) remove("cp_$id") else putString("cp_$id", e) }.apply() }
+    /** Última vez que o endereço de aviso deste companion foi conferido no Firebase. */
+    fun companionPushChecked(id: String): Long = sp.getLong("cpc_$id", 0L)
+    fun setCompanionPushChecked(id: String, t: Long) { sp.edit().putLong("cpc_$id", t).apply() }
 
     // ---------- backup na nuvem ----------
     var lastCloudBackup by mutableLongStateOf(0L)

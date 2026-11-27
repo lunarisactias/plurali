@@ -47,6 +47,24 @@ object Push {
     var onEndpoint: ((Context) -> Unit)? = null
     var notifIcon: Int = android.R.drawable.stat_notify_sync
     var openApp: ((Context) -> Intent)? = null
+    /**
+     * Na conexão própria, os canais a ouvir além do canal deste aparelho. O Companion ouve um canal por sistema,
+     * calculado a partir do convite ([topicFor]): o Plurali sabe esse canal sem precisar ler nada no Firebase,
+     * então ele não fica desatualizado (nem ao reinstalar o app).
+     */
+    var extraTopics: ((Context) -> List<String>)? = null
+
+    /** Canal secreto do companion de um convite (só quem tem o convite consegue calcular). */
+    fun topicFor(shareId: String, key: String) = "plurali_" + ShareCrypto.sha256("plurali-push|$shareId|$key").take(32)
+    fun urlFor(shareId: String, key: String) = "$SERVER/" + topicFor(shareId, key)
+
+    /** Os canais da conexão própria mudaram (ex.: passou a acompanhar outro sistema): reconecta. */
+    fun restartOwn(ctx: Context) {
+        val app = ctx.applicationContext
+        if (mode(app) != OWN) return
+        app.stopService(Intent(app, PushService::class.java))
+        startService(app)
+    }
 
     private fun sp(ctx: Context) = ctx.applicationContext.getSharedPreferences("push", Context.MODE_PRIVATE)
 
@@ -113,6 +131,7 @@ object Push {
             c.setFixedLengthStreamingMode(body.size)
             c.outputStream.use { it.write(body) }
             val ok = c.responseCode in 200..299
+            android.util.Log.i("PluraliPush", "aviso enviado: " + c.responseCode)
             c.disconnect()
             ok
         }.getOrDefault(false)
@@ -236,7 +255,9 @@ class PushService : Service() {
         if (Push.mode(this) != Push.OWN || endpoint == null) { stopSelf(); return START_NOT_STICKY }
         if (!running) {
             running = true
-            worker = thread(name = "ntfy") { loop(endpoint) }
+            // o canal deste aparelho + os canais extras (no Companion, um por sistema acompanhado), numa conexão só
+            val topics = (listOf(endpoint.substringAfterLast('/')) + (Push.extraTopics?.invoke(this) ?: emptyList())).distinct()
+            worker = thread(name = "ntfy") { loop(Push.SERVER + "/" + topics.joinToString(",")) }
         }
         return START_STICKY
     }
@@ -251,6 +272,7 @@ class PushService : Service() {
                 c.readTimeout = 120_000 // sem nem o keepalive em 2 min = conexão caída
                 c.setRequestProperty("Accept", "application/x-ndjson")
                 if (c.responseCode !in 200..299) throw java.io.IOException("ntfy respondeu ${c.responseCode}")
+                android.util.Log.i("PluraliPush", "conexão própria aberta")
                 // ao (re)conectar, confere uma vez: pode ter mudado algo enquanto estava desconectado
                 Push.ping(this)
                 wait = 5_000L
@@ -258,10 +280,11 @@ class PushService : Service() {
                     for (line in lines) {
                         if (!running) break
                         val ev = runCatching { JSONObject(line).optString("event") }.getOrNull()
-                        if (ev == "message") Push.ping(this)
+                        if (ev == "message") { android.util.Log.i("PluraliPush", "aviso recebido"); Push.ping(this) }
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                android.util.Log.i("PluraliPush", "conexão própria caiu: " + e.javaClass.simpleName)
             } finally {
                 runCatching { conn?.disconnect() }
             }

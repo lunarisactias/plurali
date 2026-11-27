@@ -107,7 +107,10 @@ object CompanionSync {
                         .put("data", ShareCrypto.seal(snap.toJson(), c.key))
                     fb.put("shares/${c.shareId}", body.toString())
                     Prefs.setCompanionSynced(c.id, hash, System.currentTimeMillis())
-                    Push.send(Prefs.companionPush(c.id))
+                    // o canal calculado do convite (conexão própria do companion) e, se for outro, o endereço publicado (app ntfy)
+                    val derived = Push.urlFor(c.shareId, c.key)
+                    Push.send(derived)
+                    CompanionInbox.pushFor(fb, c)?.takeIf { it != derived }?.let { Push.send(it) }
                 }
             }
 
@@ -319,6 +322,42 @@ object CompanionInbox {
         )
     }
 
+    /**
+     * Endereço de aviso (ntfy) do companion, para avisar na hora que algo mudou.
+     * Usa o que já se sabe, mas confere de novo no Firebase de tempos em tempos (no máximo a cada 2 min se ainda
+     * não se sabe, a cada 10 min se já se sabe), sem esperar a conferência de recados: assim o aviso funciona
+     * logo depois que o companion liga os avisos instantâneos (ou troca de endereço, ao reinstalar ou mudar o jeito
+     * de receber), mesmo com eles desligados no Plurali.
+     */
+    fun pushFor(fb: FirebaseRest, c: CompanionProfile): String? {
+        val known = Prefs.companionPush(c.id)
+        val wait = if (known == null) 2 * 60_000L else 10 * 60_000L
+        val now = System.currentTimeMillis()
+        if (now - Prefs.companionPushChecked(c.id) < wait) return known
+        Prefs.setCompanionPushChecked(c.id, now)
+        val found = newestPush(c) { slot -> runCatching { fb.get(Inbox.path(c.shareId, c.key, slot)) }.getOrNull() }
+        if (found != known) Prefs.setCompanionPush(c.id, found)
+        android.util.Log.i("PluraliPush", "endereço de aviso do companion: " + (if (found == null) "não publicado" else if (found == known) "o mesmo" else "novo"))
+        return found
+    }
+
+    /**
+     * O endereço mais recente entre as vagas do companion (se ele reinstalou o app, pode haver uma vaga antiga
+     * com um endereço que não funciona mais).
+     */
+    fun newestPush(c: CompanionProfile, read: (Int) -> String?): String? {
+        var best: String? = null
+        var bestAt = Long.MIN_VALUE
+        for (slot in 0 until Inbox.SLOTS) {
+            val raw = read(slot) ?: break
+            val o = runCatching { JSONObject(raw) }.getOrNull() ?: continue
+            val p = o.optString("push").takeIf { it.isNotBlank() }?.let { ShareCrypto.open(it, c.key) } ?: continue
+            val at = o.optLong("updated", 0L)
+            if (at >= bestAt) { best = p; bestAt = at }
+        }
+        return best
+    }
+
     /** Um companion avisou (ntfy): confere agora. */
     fun now(ctx: Context) {
         WorkManager.getInstance(ctx).enqueueUniqueWork(
@@ -340,11 +379,11 @@ object CompanionInbox {
         val fresh = mutableListOf<CompanionMessage>()
         var newPush = false
         for (c in targets(d)) {
-            var push: String? = null
+            val raws = mutableListOf<String>()
             for (slot in 0 until Inbox.SLOTS) {
                 val raw = runCatching { fb.get(Inbox.path(c.shareId, c.key, slot)) }.getOrNull() ?: break
+                raws += raw
                 val o = JSONObject(raw)
-                o.optString("push").takeIf { it.isNotBlank() }?.let { ShareCrypto.open(it, c.key) }?.let { push = it }
                 if (!c.perms.messages) continue
                 val plain = ShareCrypto.open(o.optString("data"), c.key) ?: continue
                 Inbox.decode(plain).forEach { m ->
@@ -352,6 +391,8 @@ object CompanionInbox {
                     if (id !in known) fresh += CompanionMessage(id, c.id, m.text, m.time)
                 }
             }
+            val push = CompanionInbox.newestPush(c) { raws.getOrNull(it) }
+            Prefs.setCompanionPushChecked(c.id, System.currentTimeMillis())
             if (push != null && push != Prefs.companionPush(c.id)) {
                 Prefs.setCompanionPush(c.id, push)
                 newPush = true

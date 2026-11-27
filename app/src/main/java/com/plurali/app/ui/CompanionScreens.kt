@@ -134,9 +134,14 @@ fun CompanionsScreen(nav: NavHostController) {
                 }
             }
             if (d.cloud != null && d.companions.isNotEmpty()) item {
+                // quem já recebe avisos na hora, mas cujos recados ainda chegam com atraso aqui
+                val fast = d.companions.filter { it.perms.messages && Prefs.companionPush(it.id) != null }.map { it.name }
                 com.plurali.shared.PushSettings(
                     "o recado de um companion", "os recados dos companions são conferidos a cada 1 h",
                     Modifier.fillMaxWidth().themed().padding(12.dp),
+                    hint = if (fast.isEmpty()) null else
+                        fast.joinToString(", ") + (if (fast.size == 1) " já recebe" else " já recebem") +
+                            " os avisos na hora. Ligue aqui também para os recados chegarem na hora do lado de cá.",
                 )
             }
             if (d.cloud != null && d.companions.isEmpty()) item { EmptyHint("Nenhum companion ainda. Toque em “Novo companion”.") }

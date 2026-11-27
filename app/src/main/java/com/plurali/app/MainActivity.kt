@@ -75,6 +75,16 @@ class MainActivity : ComponentActivity() {
         if (Store.data.value.loginsEnabled && Session.stoppedAt > 0 &&
             System.currentTimeMillis() - Session.stoppedAt > Session.LOCK_AFTER_MS
         ) Session.who = null
+        // ao abrir o app, confere se chegou recado de algum companion (no máximo uma vez por minuto)
+        val now = System.currentTimeMillis()
+        if (Store.data.value.companions.isNotEmpty() && now - inboxCheckedAt > 60_000L) {
+            inboxCheckedAt = now
+            com.plurali.app.sys.CompanionInbox.now(this)
+        }
+    }
+
+    companion object {
+        private var inboxCheckedAt = 0L
     }
 }
 

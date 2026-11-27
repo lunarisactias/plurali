@@ -43,12 +43,14 @@ data class Followed(
 
 object Follows {
     private lateinit var sp: SharedPreferences
+    private var appCtx: Context? = null
     private val _list = MutableStateFlow<List<Followed>>(emptyList())
     val list: StateFlow<List<Followed>> get() = _list
 
     fun init(ctx: Context) {
         if (::sp.isInitialized) return
         sp = ctx.getSharedPreferences("companion", Context.MODE_PRIVATE)
+        appCtx = ctx.applicationContext
         _list.value = runCatching {
             val a = JSONArray(sp.getString("follows", "[]"))
             (0 until a.length()).map { a.getJSONObject(it) }.mapNotNull { o ->
@@ -78,8 +80,8 @@ object Follows {
         sp.edit().putString("follows", a.toString()).apply()
     }
 
-    fun add(inv: Invite) = save(_list.value.filterNot { it.id == inv.shareId } + Followed(inv))
-    fun remove(id: String) = save(_list.value.filterNot { it.id == id })
+    fun add(inv: Invite) { save(_list.value.filterNot { it.id == inv.shareId } + Followed(inv)); appCtx?.let { Push.restartOwn(it) } }
+    fun remove(id: String) { save(_list.value.filterNot { it.id == id }); appCtx?.let { Push.restartOwn(it) } }
     @Synchronized
     fun replace(f: Followed) = save(_list.value.map { if (it.id == f.id) f else it })
 
@@ -189,10 +191,17 @@ object Poller {
 
     private fun publishedKey(f: Followed) = "pushSent_" + f.id
 
+    /**
+     * O endereço que este celular publica para um sistema: na conexão própria, o canal calculado do convite
+     * (o Plurali já sabe qual é); pelo app ntfy, o endereço que o app ntfy criou.
+     */
+    private fun myAddress(ctx: Context, f: Followed): String? =
+        if (Push.mode(ctx) == Push.OWN) Push.urlFor(f.invite.shareId, f.invite.key) else Push.endpoint(ctx)
+
     /** Envia o endereço de aviso deste celular para o sistema (se mudou desde a última vez). */
     @Synchronized
     fun publishPush(ctx: Context, f: Followed, force: Boolean = false) {
-        val mine = Push.endpoint(ctx) ?: ""
+        val mine = myAddress(ctx, f) ?: ""
         val sp = ctx.getSharedPreferences("companion", Context.MODE_PRIVATE)
         if (!force && sp.getString(publishedKey(f), null) == mine) return
         val fb = client(f.invite)
@@ -200,6 +209,7 @@ object Poller {
         val msgs = cur?.let { ShareCrypto.open(it.optString("data"), f.invite.key) }?.let { Inbox.decode(it) }.orEmpty()
         if (cur == null && mine.isEmpty()) { sp.edit().putString(publishedKey(f), mine).apply(); return }
         writeSlot(fb, f.invite, path, msgs, mine.ifEmpty { null })
+        android.util.Log.i("PluraliPush", "endereço de aviso publicado")
         sp.edit().putString(publishedKey(f), mine).apply()
         Push.send(f.snapshot?.push) // o Plurali confere na hora e já passa a avisar este celular
     }
@@ -256,7 +266,7 @@ object Poller {
             val (path, cur) = slot
             val old = cur?.let { ShareCrypto.open(it.optString("data"), inv.key) }?.let { Inbox.decode(it) }.orEmpty()
             val list = (old + Inbox.Msg(java.util.UUID.randomUUID().toString(), text, System.currentTimeMillis())).takeLast(50)
-            val mine = Push.endpoint(ctx)
+            val mine = myAddress(ctx, f)
             writeSlot(fb, inv, path, list, mine)
             ctx.getSharedPreferences("companion", Context.MODE_PRIVATE).edit().putString(publishedKey(f), mine ?: "").apply()
             Push.send(f.snapshot?.push) // o recado chega na hora se o Plurali tiver avisos instantâneos
@@ -350,6 +360,7 @@ class CompanionApp : Application() {
             Push.onEndpoint = { c -> Poller.pushChanged(c) }
             Push.notifIcon = R.drawable.ic_stat_companion
             Push.openApp = { c -> Intent(c, MainActivity::class.java) }
+            Push.extraTopics = { _ -> Follows.list.value.map { Push.topicFor(it.invite.shareId, it.invite.key) } }
             if (Build.VERSION.SDK_INT >= 26) {
                 ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(
                     NotificationChannel(Poller.CH_FRONT, "Mudanças de front", NotificationManager.IMPORTANCE_DEFAULT).apply {

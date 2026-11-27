@@ -17,7 +17,7 @@ import kotlinx.coroutines.delay
  * [offText]: o que acontece com os avisos desligados (ex.: "confere a cada 15 min").
  */
 @Composable
-fun PushSettings(what: String, offText: String, modifier: Modifier = Modifier) {
+fun PushSettings(what: String, offText: String, modifier: Modifier = Modifier, hint: String? = null) {
     val ctx = LocalContext.current
     var tick by remember { mutableIntStateOf(0) }
     // o endereço do app ntfy chega alguns segundos depois; a permissão de bateria volta de outra tela
@@ -41,6 +41,7 @@ fun PushSettings(what: String, offText: String, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.bodySmall,
             color = if (mode != Push.OFF && endpoint == null && err != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (hint != null && mode == Push.OFF) Text(hint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         Option(mode == Push.NTFY, "Pelo app ntfy (recomendado)",
             if (hasNtfy) "Quase não gasta bateria." else "Precisa do app ntfy (gratuito) instalado.") { Push.setMode(ctx, Push.NTFY); tick++ }
         if (!hasNtfy) TextButton(onClick = {
