@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacidade do Plurali</title>
+<meta name="description" content="Política de Privacidade do Plurali e do Plurali Companion.">
+<style>
+  :root { --bg: #1e2129; --card: #262a33; --text: #eceef2; --muted: #a9afbb; --gold: #d6ac5e; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f6f4ef; --card: #ffffff; --text: #22252b; --muted: #5d6370; --gold: #9a7224; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  .tag { color: var(--muted); margin: 0 0 24px; }
+  h2 { color: var(--gold); font-size: 1.15rem; margin: 28px 0 6px; }
+  ul { padding-left: 20px; }
+  a { color: var(--gold); }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="index.html">← Plurali</a></p>
+  <h1>Política de Privacidade</h1>
+  <p class="tag">Plurali e Plurali Companion · atualizada em 26 de novembro de 2026</p>
+
+  <h2>Resumo</h2>
+  <p>O Plurali não tem servidor próprio, não tem anúncios, não coleta estatísticas de uso e não vende nem
+    compartilha dados. Tudo o que você registra fica no seu celular. O que sai dele vai criptografado de ponta a ponta,
+    com chaves que só você (e, no caso dos Companions, quem recebeu o seu convite) tem.</p>
+
+  <h2>Dados guardados no celular</h2>
+  <p>Membros, front, conversas, diário, remédios, tarefas, fotos, áudios e o restante ficam num arquivo interno do app,
+    no seu aparelho. Desinstalar o app apaga esses dados.</p>
+
+  <h2>Backup no Google Drive</h2>
+  <ul>
+    <li>Se você ativar o backup na nuvem, o Plurali pede acesso <strong>somente à pasta de dados do próprio app</strong>
+      no seu Google Drive (permissão <code>drive.appdata</code>). Essa pasta fica oculta: não aparece entre os seus arquivos
+      e o Plurali não consegue ver, ler nem alterar nenhum outro arquivo do seu Drive.</li>
+    <li>Antes de sair do celular, o backup é criptografado (AES-256-GCM) com um código de 20 letras que só você tem.
+      Nem o Google nem quem fez o app consegue abrir o conteúdo.</li>
+    <li>O Plurali guarda as 2 cópias mais recentes e apaga as mais antigas. Ao desativar o backup, as cópias são apagadas.</li>
+    <li>Os dados recebidos das APIs do Google são usados só para guardar e restaurar o seu backup. Eles não são
+      transferidos a ninguém, não são usados para publicidade e ninguém os lê.</li>
+    <li>O uso e a transferência, para qualquer outro app, de informações recebidas das APIs do Google seguem a
+      <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Usuário dos Serviços de API do Google</a>,
+      incluindo os requisitos de Uso Limitado.</li>
+    <li>Você pode retirar o acesso a qualquer momento em
+      <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+  </ul>
+
+  <h2>Plurali Companion</h2>
+  <p>Se o sistema convidar um Companion (por exemplo, a parceria ou a família), o Plurali envia ao Firebase
+    (serviço do Google) só as informações liberadas no perfil daquela pessoa, criptografadas com uma chave que existe
+    apenas no Plurali e no convite. Recados do Companion para o sistema seguem o mesmo caminho, também criptografados.
+    Para entrar no Firebase, cada app usa uma conta anônima, sem nome, e-mail ou telefone. Excluir um Companion apaga
+    os dados dele do Firebase.</p>
+
+  <h2>Avisos instantâneos (ntfy)</h2>
+  <p>Se você ligar os avisos instantâneos, o app usa o serviço gratuito <a href="https://ntfy.sh">ntfy.sh</a> para
+    mandar ao outro aparelho só um sinal de “mudou”, por um canal com nome aleatório e secreto. Nenhum dado seu passa
+    pelo ntfy: o conteúdo continua indo criptografado pelo Firebase.</p>
+
+  <h2>Permissões do celular</h2>
+  <ul>
+    <li>Notificações: para lembretes, remédios, recados e avisos de front.</li>
+    <li>Microfone: só quando você grava uma mensagem de voz ou a voz de um item das boas-vindas.</li>
+    <li>Fotos: só as que você escolhe no seletor de fotos do Android.</li>
+  </ul>
+
+  <h2>Crianças</h2>
+  <p>O Plurali não é direcionado a crianças e não coleta dados de ninguém.</p>
+
+  <h2>Mudanças nesta política</h2>
+  <p>Se esta política mudar, a nova versão aparece nesta página, com a data de atualização.</p>
+</main>
+</body>
+</html>

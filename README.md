@@ -98,6 +98,7 @@ o que dá para algo em torno de 700 a 1000 sistemas. Se o limite for atingido, o
 ### Backup no Google Drive (configuração única no Google Cloud)
 O app pede acesso só à pasta oculta do app no Drive (`drive.appdata`). No projeto **plurali-8ffe7** do Google Cloud precisa haver:
 1. **Google Drive API** ativada.
-2. **Tela de consentimento** (Google Auth Platform): nome "Plurali", público externo, publicada ("Em produção").
+2. **Tela de consentimento** (Google Auth Platform): nome "Plurali", público externo, publicada ("Em produção"), com página inicial
+   e política de privacidade em https://plurali-8ffe7.web.app (pasta `site/`, publicada com `firebase deploy --only hosting`) e o domínio autorizado `plurali-8ffe7.web.app`.
 3. **Cliente OAuth do tipo Android**: pacote `com.plurali.app` e o SHA-1 da chave que assina o APK
    (`00:A4:EF:A3:40:59:C1:F8:30:46:53:97:FC:D7:31:44:EE:76:94:EA`).
