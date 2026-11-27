@@ -19,3 +19,6 @@ captures/
 
 # configurações locais do Claude Code
 .claude/settings.local.json
+
+# cache do firebase deploy
+.firebase/
