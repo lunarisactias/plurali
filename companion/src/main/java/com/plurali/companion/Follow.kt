@@ -120,7 +120,7 @@ object Poller {
             // primeiro só o carimbo (poucos bytes); baixa tudo só se mudou
             val stamp = fb.get("shares/${inv.shareId}/updated")?.trim()?.toLongOrNull()
             val raw = if (stamp != null && stamp == f.updated && f.snapshot != null && !f.revoked) "" else fb.get("shares/${inv.shareId}")
-            if (raw == "") f.copy(lastFetch = now, error = null)
+            if (raw == "") f.copy(lastFetch = now, error = null).also { android.util.Log.i("PluraliPush", "conferido: nada mudou") }
             else if (raw == null) f.copy(revoked = true, error = null, lastFetch = now)
             else {
                 val data = JSONObject(raw).optString("data")
@@ -128,6 +128,7 @@ object Poller {
                 val snap = Snapshot.fromJson(plain)
                 fetchMedia(fb, snap)
                 val key = snap.frontKey()
+                android.util.Log.i("PluraliPush", "pacote novo; front " + (if (f.frontKey == null) "(primeira vez)" else if (f.frontKey != key) "mudou" else "igual") + (if (notify) "" else " (sem notificar)"))
                 if (notify && snap.front != null && f.frontKey != null && f.frontKey != key) notifyFront(ctx, f.id, snap)
                 f.copy(snapshot = snap, frontKey = key, lastFetch = now, error = null, revoked = false, updated = JSONObject(raw).optLong("updated"))
             }
@@ -224,6 +225,15 @@ object Poller {
         )
     }
 
+    private fun lastPingAt(ctx: Context) = ctx.getSharedPreferences("companion", Context.MODE_PRIVATE).getLong("lastPing", 0L)
+
+    /** Um aviso chegou de verdade: dá para conferir menos vezes. */
+    fun pinged(ctx: Context) {
+        val first = System.currentTimeMillis() - lastPingAt(ctx) >= 3 * 86_400_000L
+        ctx.getSharedPreferences("companion", Context.MODE_PRIVATE).edit().putLong("lastPing", System.currentTimeMillis()).apply()
+        if (first) schedule(ctx, replace = true)
+    }
+
     /** Chegou um aviso: busca agora. */
     fun now(ctx: Context) {
         WorkManager.getInstance(ctx).enqueueUniqueWork(
@@ -280,7 +290,10 @@ object Poller {
 
     /** Com avisos instantâneos, a conferência periódica vira só uma garantia (a cada 6 h); sem eles, a cada 15 min. */
     fun schedule(ctx: Context, replace: Boolean = false) {
-        val minutes = if (Push.active(ctx)) 6 * 60L else 15L
+        // só relaxa para 6 h quando os avisos já chegaram de verdade nos últimos 3 dias
+        // (se o Plurali do sistema estiver desatualizado ou o aviso não chegar, continua conferindo a cada 15 min)
+        val pinged = System.currentTimeMillis() - lastPingAt(ctx) < 3 * 86_400_000L
+        val minutes = if (Push.active(ctx) && pinged) 6 * 60L else 15L
         WorkManager.getInstance(ctx).enqueueUniquePeriodicWork(
             "poll", if (replace) ExistingPeriodicWorkPolicy.UPDATE else ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<PollWorker>(minutes, TimeUnit.MINUTES)
@@ -356,7 +369,8 @@ class CompanionApp : Application() {
         fun ensure(ctx: Context) {
             Follows.init(ctx.applicationContext)
             MediaCache.init(ctx.applicationContext)
-            Push.onPing = { c -> Poller.now(c) }
+            Push.onPing = { c -> Poller.pinged(c); Poller.now(c) }
+            Push.onReconnect = { c -> Poller.now(c) }
             Push.onEndpoint = { c -> Poller.pushChanged(c) }
             Push.notifIcon = R.drawable.ic_stat_companion
             Push.openApp = { c -> Intent(c, MainActivity::class.java) }

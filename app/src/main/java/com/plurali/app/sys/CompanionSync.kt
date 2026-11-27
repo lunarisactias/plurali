@@ -324,14 +324,13 @@ object CompanionInbox {
 
     /**
      * Endereço de aviso (ntfy) do companion, para avisar na hora que algo mudou.
-     * Usa o que já se sabe, mas confere de novo no Firebase de tempos em tempos (no máximo a cada 2 min se ainda
-     * não se sabe, a cada 10 min se já se sabe), sem esperar a conferência de recados: assim o aviso funciona
-     * logo depois que o companion liga os avisos instantâneos (ou troca de endereço, ao reinstalar ou mudar o jeito
-     * de receber), mesmo com eles desligados no Plurali.
+     * Confere no Firebase a cada envio (a conexão do envio já está aberta, então custa poucos bytes), sem esperar
+     * a conferência de recados: assim o aviso funciona logo depois que o companion liga os avisos instantâneos
+     * ou troca de endereço (ao reinstalar ou mudar o jeito de receber), mesmo com eles desligados no Plurali.
      */
     fun pushFor(fb: FirebaseRest, c: CompanionProfile): String? {
         val known = Prefs.companionPush(c.id)
-        val wait = if (known == null) 2 * 60_000L else 10 * 60_000L
+        val wait = 0L // confere a cada envio: reaproveita a conexão do envio, custa poucos bytes, e nunca fica desatualizado
         val now = System.currentTimeMillis()
         if (now - Prefs.companionPushChecked(c.id) < wait) return known
         Prefs.setCompanionPushChecked(c.id, now)

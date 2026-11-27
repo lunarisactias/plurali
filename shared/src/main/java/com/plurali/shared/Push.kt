@@ -43,6 +43,8 @@ object Push {
     // ---- configurado por cada app (no Application.onCreate) ----
     /** Chegou um aviso: buscar os dados novos. */
     var onPing: ((Context) -> Unit)? = null
+    /** A conexão própria (re)abriu: confere uma vez, sem contar como aviso recebido (se null, usa [onPing]). */
+    var onReconnect: ((Context) -> Unit)? = null
     /** O endereço deste aparelho mudou: contar para o outro lado. */
     var onEndpoint: ((Context) -> Unit)? = null
     var notifIcon: Int = android.R.drawable.stat_notify_sync
@@ -200,11 +202,15 @@ class UpReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, i: Intent) {
         if (i.getStringExtra("token") != Push.upToken(ctx)) return
         when (i.action) {
-            "org.unifiedpush.android.connector.NEW_ENDPOINT" -> i.getStringExtra("endpoint")?.let { Push.setEndpoint(ctx, it) }
+            "org.unifiedpush.android.connector.NEW_ENDPOINT" -> i.getStringExtra("endpoint")?.let {
+                android.util.Log.i("PluraliPush", "app ntfy deu um endereço")
+                Push.setEndpoint(ctx, it)
+            }
             "org.unifiedpush.android.connector.REGISTRATION_FAILED" ->
                 Push.setError(ctx, "O app ntfy recusou o registro" + (i.getStringExtra("message")?.let { ": $it" } ?: "."))
             "org.unifiedpush.android.connector.UNREGISTERED" -> Push.setEndpoint(ctx, null)
             "org.unifiedpush.android.connector.MESSAGE" -> {
+                android.util.Log.i("PluraliPush", "aviso recebido pelo app ntfy")
                 i.getStringExtra("id")?.let { id ->
                     Push.distributor(ctx)?.let { d ->
                         runCatching { ctx.sendBroadcast(Intent(Push.UP_ACK).setPackage(d).putExtra("token", Push.upToken(ctx)).putExtra("id", id)) }
@@ -274,7 +280,7 @@ class PushService : Service() {
                 if (c.responseCode !in 200..299) throw java.io.IOException("ntfy respondeu ${c.responseCode}")
                 android.util.Log.i("PluraliPush", "conexão própria aberta")
                 // ao (re)conectar, confere uma vez: pode ter mudado algo enquanto estava desconectado
-                Push.ping(this)
+                (Push.onReconnect ?: Push.onPing)?.invoke(applicationContext)
                 wait = 5_000L
                 c.inputStream.bufferedReader().useLines { lines ->
                     for (line in lines) {
