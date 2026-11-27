@@ -267,7 +267,7 @@ fun LoginScreen(d: AppData, onSafety: () -> Unit, onWelcome: () -> Unit) {
                     val n = unread[m.id] ?: 0
                     SpRow(m.color, Modifier.fillMaxWidth(), onClick = { asking = Who.Member(m.id) }) {
                         Box {
-                            Avatar(m.name, m.color, m.avatar, 48.dp)
+                            Avatar(m.name, m.color, m.avatar, 48.dp, frame = m.frame)
                             if (n > 0) Box(
                                 Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp).size(16.dp)
                                     .background(MaterialTheme.colorScheme.error, androidx.compose.foundation.shape.CircleShape)

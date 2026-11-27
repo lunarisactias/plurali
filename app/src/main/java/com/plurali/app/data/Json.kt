@@ -157,7 +157,7 @@ object Json {
             .putN("avatar", m.avatar).put("birthday", m.birthday).put("archived", m.archived)
             .put("fields", m.fields.jo()).put("createdAt", m.createdAt)
             .put("password", secret(m.password))
-            .put("comfort", m.comfort).put("intro", m.intro).put("likes", m.likes).put("dislikes", m.dislikes).putN("banner", m.banner)
+            .put("comfort", m.comfort).put("intro", m.intro).put("likes", m.likes).put("dislikes", m.dislikes).putN("banner", m.banner).putN("frame", m.frame)
             .put("wishlist", m.wishlist.ja { w ->
                 JSONObject().put("id", w.id).put("kind", w.kind).put("text", w.text).put("note", w.note)
                     .put("done", w.done).put("createdAt", w.createdAt)
@@ -172,7 +172,7 @@ object Json {
         wishlist = it.arr("wishlist") { w ->
             WishItem(w.s("id"), w.s("kind").ifBlank { "buy" }, w.s("text"), w.s("note"), w.optBoolean("done"), w.optLong("createdAt"))
         },
-        comfort = it.s("comfort"), intro = it.s("intro"), likes = it.s("likes"), dislikes = it.s("dislikes"), banner = it.sN("banner"),
+        comfort = it.s("comfort"), intro = it.s("intro"), likes = it.s("likes"), dislikes = it.s("dislikes"), banner = it.sN("banner"), frame = it.sN("frame"),
     )
 
     private fun JSONObject.ints(k: String): List<Int>? {

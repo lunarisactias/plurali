@@ -201,7 +201,7 @@ object CompanionSync {
             when {
                 m != null && m.id in visible -> SnapFront(
                     m.id, m.name, if (p.pronouns) m.pronouns else "", m.color,
-                    if (p.avatars) thumb(m.avatar) else null, false, e.start, if (p.frontStatus) e.status else "",
+                    if (p.avatars) thumb(m.avatar) else null, false, e.start, if (p.frontStatus) e.status else "", frame = m.frame,
                 )
                 m != null -> SnapFront(null, hidden, "", 0xFF78909C, null, false, e.start)
                 cf != null && p.customFronts -> SnapFront(null, cf.name, "", cf.color, null, true, e.start, if (p.frontStatus) e.status else "")
@@ -258,6 +258,7 @@ object CompanionSync {
                     val bn = if (r.a == m.id) on else m.name
                     SnapRelation(other, an + " " + r.type.replaceFirstChar { it.lowercase() } + " " + bn, r.note)
                 },
+                frame = m.frame,
             )
         }
 

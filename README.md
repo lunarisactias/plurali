@@ -14,6 +14,7 @@ Kotlin + Jetpack Compose. Os dados ficam só no aparelho (`files/data.json`, mai
 - **Backup**: exporta/importa um arquivo JSON (fotos incluídas) e **backup automático** diário/semanal numa pasta escolhida
 - **Backup na nuvem**: cópia automática (a cada 1h/6h/24h, só no Wi‑Fi se quiser) numa **pasta oculta do Google Drive da própria pessoa**, criptografada de ponta a ponta com um código de 20 letras. Restaura em outro celular com a mesma conta Google e o código; guarda as 2 últimas cópias. Backups antigos no Firebase continuam funcionando e podem ser passados para o Drive com um toque
 - **Temas por perfil**: Clássico, Gatos, Jardim, Homem-Aranha, Coelhos, Inferno, Fadas, Exploração, Insetos, Desenho, Pássaros, Ladybug e Vento. Cada um muda cores, formato dos cartões e das fotos, contornos, enfeites e desenhos do fundo. Dá para ajustar cor, letras, tamanho, imagem de fundo e animação. A tela de login e alters novos usam o tema padrão; o tema da pessoa carrega ao entrar na conta
+- **Molduras do perfil** (como as decorações de avatar do Discord): Neon, Vinhas, Eletrônica, Arco-íris, Estrelas, Fogo, Gelo, Flores, Corações, Coroa, Gatinho e Pixel. Cada membro escolhe a sua; elas acompanham o formato da foto do tema, algumas são animadas e aparecem também no Companion
 - **Logins**: Sistema (admin, com código de recuperação), um por membro, e visitante sem login
 - **Conversas** diretas e em grupo (sem apagar; edição só no 1º minuto), com reações, fotos, fixadas e "visto"
 - **Mural de avisos**, **wishlist**, **relações** entre membros e **mapa do sistema**

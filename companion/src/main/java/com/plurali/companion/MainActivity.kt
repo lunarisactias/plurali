@@ -49,6 +49,7 @@ import com.plurali.shared.*
 import com.plurali.app.data.Appearance
 import com.plurali.app.data.AppearanceJson
 import com.plurali.app.ui.theme.LocalUi
+import com.plurali.app.ui.theme.FramedAvatar
 import com.plurali.app.ui.theme.Strip
 import com.plurali.app.ui.theme.ThemedBackground
 import com.plurali.app.ui.theme.isDark
@@ -129,7 +130,8 @@ private fun rememberNow(): Long {
 }
 
 @Composable
-private fun Avatar(name: String, color: Long, b64: String?, size: Dp) {
+private fun Avatar(name: String, color: Long, b64: String?, size: Dp, frame: String? = null) {
+    if (frame != null) { FramedAvatar(frame, size, color) { Avatar(name, color, b64, size) }; return }
     val bmp: ImageBitmap? = remember(b64, MediaCache.version) { MediaCache.bitmap(b64)?.asImageBitmap() }
     val ui = LocalUi.current
     val ears = ui.avatarId == "cat" || ui.avatarId == "bunny"
@@ -372,7 +374,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.frontItems(s: Snapsho
         val intro = s.people?.find { it.id == f.personId }?.intro.orEmpty()
         val canOpen = f.personId != null && s.people?.any { it.id == f.personId } == true
         SpCard(f.color, onClick = if (canOpen) ({ open(f.personId!!) }) else null) {
-            Avatar(f.name, f.color, f.avatar, 56.dp)
+            Avatar(f.name, f.color, f.avatar, 56.dp, f.frame)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(f.name, style = MaterialTheme.typography.titleMedium)
@@ -477,7 +479,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.peopleItems(s: Snapsh
     items(list.size) { i ->
         val p = list[i]
         SpCard(p.color, onClick = { open(p) }) {
-            Avatar(p.name, p.color, p.avatar, 52.dp)
+            Avatar(p.name, p.color, p.avatar, 52.dp, p.frame)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(p.name, style = MaterialTheme.typography.titleMedium)

@@ -34,6 +34,7 @@ data class SnapPerson(
     val banner: String? = null, // capa: "m:<id>" ou jpeg em base64
     val groups: List<String> = emptyList(),
     val relations: List<SnapRelation> = emptyList(),
+    val frame: String? = null, // moldura do perfil
 )
 
 /** Relação entre membros, já escrita como frase ("Ana protege Bruno"). otherId = a outra pessoa, se estiver visível. */
@@ -48,6 +49,7 @@ data class SnapFront(
     val custom: Boolean,
     val since: Long,
     val status: String = "",
+    val frame: String? = null,
 )
 
 data class SnapNotice(val title: String, val text: String, val author: String, val time: Long, val pinned: Boolean, val color: Long)
@@ -113,7 +115,7 @@ data class Snapshot(
             o.put("front", JSONArray(l.map { f ->
                 JSONObject().put("personId", f.personId ?: JSONObject.NULL).put("name", f.name).put("pronouns", f.pronouns)
                     .put("color", f.color).put("avatar", f.avatar ?: JSONObject.NULL).put("custom", f.custom)
-                    .put("since", f.since).put("status", f.status)
+                    .put("since", f.since).put("status", f.status).put("frame", f.frame ?: JSONObject.NULL)
             }))
         }
         notices?.let { l ->
@@ -137,6 +139,7 @@ data class Snapshot(
                     .put("intro", p.intro).put("banner", p.banner ?: JSONObject.NULL).put("groups", JSONArray(p.groups))
                     .put("relations", JSONArray(p.relations.map { r -> JSONObject().put("otherId", r.otherId ?: JSONObject.NULL).put("text", r.text).put("note", r.note) }))
                     .put("fields", JSONArray(p.fields.map { JSONObject().put("name", it.name).put("value", it.value) }))
+                    .put("frame", p.frame ?: JSONObject.NULL)
                     .apply {
                         p.wishlist?.let { w ->
                             put("wishlist", JSONArray(w.map {
@@ -183,7 +186,7 @@ data class Snapshot(
                 generatedAt = o.optLong("generatedAt"),
                 front = o.list("front") {
                     SnapFront(it.sN("personId"), it.s("name"), it.s("pronouns"), it.optLong("color"), it.sN("avatar"),
-                        it.optBoolean("custom"), it.optLong("since"), it.s("status"))
+                        it.optBoolean("custom"), it.optLong("since"), it.s("status"), it.sN("frame"))
                 },
                 notices = o.list("notices") {
                     SnapNotice(it.s("title"), it.s("text"), it.s("author"), it.optLong("time"), it.optBoolean("pinned"), it.optLong("color"))
@@ -200,6 +203,7 @@ data class Snapshot(
                         p.list("wishlist") { SnapWish(it.s("kind"), it.s("text"), it.s("note"), it.optBoolean("done")) },
                         p.s("intro"), p.sN("banner"), p.strs("groups"),
                         p.list("relations") { SnapRelation(it.sN("otherId"), it.s("text"), it.s("note")) } ?: emptyList(),
+                        p.sN("frame"),
                     )
                 },
                 safety = o.optJSONObject("safety")?.let { s ->

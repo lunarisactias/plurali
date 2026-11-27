@@ -142,7 +142,7 @@ fun NewChatScreen(nav: NavHostController) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(on, { selected = if (it) selected + m.id else selected - m.id }, enabled = !fixed)
-                    Avatar(m.name, m.color, m.avatar, 36.dp)
+                    Avatar(m.name, m.color, m.avatar, 36.dp, frame = m.frame)
                     Spacer(Modifier.width(10.dp))
                     Text(m.name + if (fixed) " (você)" else "")
                 }

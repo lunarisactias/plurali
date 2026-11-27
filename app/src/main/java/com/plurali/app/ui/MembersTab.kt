@@ -140,7 +140,7 @@ fun MembersTab(nav: NavHostController) {
                 val f = fronting[m.id]
                 Row(Modifier.height(IntrinsicSize.Min)) {
                     SpRow(m.color, Modifier.weight(1f), onClick = { nav.go("member/${m.id}") }) {
-                        Avatar(m.name, m.color, m.avatar, if (compact) 36.dp else 56.dp)
+                        Avatar(m.name, m.color, m.avatar, if (compact) 36.dp else 56.dp, frame = if (compact) null else m.frame)
                         Spacer(Modifier.width(12.dp))
                         if (compact) Text(m.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                         else NameAndPronouns(m.name, m.pronouns, Modifier.weight(1f))

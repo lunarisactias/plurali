@@ -48,6 +48,7 @@ data class Member(
     val likes: String = "",
     val dislikes: String = "",
     val banner: String? = null,
+    val frame: String? = null, // moldura do perfil (AVATAR_FRAMES), escolhida pela própria pessoa
 ) {
     /** Papéis separados por vírgula ou barra: "Protetor, Host". */
     fun roles(): List<String> = role.split(',', '/', ';').map { it.trim() }.filter { it.isNotEmpty() }
@@ -381,9 +382,10 @@ data class Subject(
     val avatar: String?,
     val custom: Boolean,
     val pronouns: String = "",
+    val frame: String? = null,
 )
 
-fun Member.toSubject() = Subject(id, name, color, avatar, false, pronouns)
+fun Member.toSubject() = Subject(id, name, color, avatar, false, pronouns, frame)
 fun CustomFront.toSubject() = Subject(id, name, color, null, true)
 
 fun AppData.subject(id: String?): Subject? {

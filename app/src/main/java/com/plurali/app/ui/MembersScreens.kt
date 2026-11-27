@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
@@ -76,14 +78,14 @@ fun MemberDetailScreen(nav: NavHostController, id: String) {
                 // capa com o avatar sobreposto na borda de baixo
                 if (m.banner != null) Box(Modifier.fillMaxWidth().height(150.dp + 56.dp)) {
                     StoredImage(m.banner, Modifier.fillMaxWidth().height(150.dp))
-                    Avatar(m.name, m.color, m.avatar, 112.dp, Modifier.align(Alignment.BottomCenter))
+                    Avatar(m.name, m.color, m.avatar, 112.dp, Modifier.align(Alignment.BottomCenter), frame = m.frame)
                 }
                 Column(
                     Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = if (m.banner != null) 8.dp else 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     if (m.banner == null) {
-                        Avatar(m.name, m.color, m.avatar, 112.dp)
+                        Avatar(m.name, m.color, m.avatar, 112.dp, frame = m.frame)
                         Spacer(Modifier.height(8.dp))
                     }
                     Text(m.name, style = MaterialTheme.typography.headlineSmall)
@@ -348,7 +350,7 @@ fun MemberEditScreen(nav: NavHostController, id: String) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(m.name, m.color, m.avatar, 88.dp, Modifier.clickable {
                     pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                })
+                }, frame = m.frame)
                 Spacer(Modifier.width(16.dp))
                 Column {
                     TextButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
@@ -369,6 +371,27 @@ fun MemberEditScreen(nav: NavHostController, id: String) {
                 }
             }
             if (m.banner != null) TextButton(onClick = { m = m.copy(banner = null) }) { Text("Remover capa") }
+            // moldura em volta da foto (aparece no perfil, na lista, no front e no Companion)
+            Text("Moldura do perfil: " + com.plurali.app.ui.theme.frameName(m.frame), style = MaterialTheme.typography.labelLarge)
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                (listOf<String?>(null) + com.plurali.app.ui.theme.AVATAR_FRAMES.map { it.id }).forEach { id ->
+                    val sel = m.frame == id
+                    Column(
+                        Modifier.width(72.dp).clip(RoundedCornerShape(12.dp))
+                            .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
+                            .clickable { m = m.copy(frame = id) }.padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Avatar(m.name, m.color, m.avatar, 44.dp, frame = id)
+                        Spacer(Modifier.height(10.dp))
+                        Text(com.plurali.app.ui.theme.frameName(id), style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                            fontWeight = if (sel) FontWeight.Bold else null)
+                    }
+                }
+            }
             OutlinedTextField(
                 m.name, { m = m.copy(name = it); nameError = false }, label = { Text("Nome *") },
                 isError = nameError, supportingText = { if (nameError) Text("Informe um nome") },

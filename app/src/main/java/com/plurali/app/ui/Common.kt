@@ -176,7 +176,12 @@ fun rememberAvatar(path: String?): ImageBitmap? {
 }
 
 @Composable
-fun Avatar(name: String, color: Long, avatar: String?, size: Dp = 44.dp, modifier: Modifier = Modifier) {
+fun Avatar(name: String, color: Long, avatar: String?, size: Dp = 44.dp, modifier: Modifier = Modifier, frame: String? = null) {
+    if (frame != null) {
+        // moldura escolhida pela pessoa (neon, vinhas…) em volta da foto
+        com.plurali.app.ui.theme.FramedAvatar(frame, size, color, modifier) { Avatar(name, color, avatar, size) }
+        return
+    }
     val bmp = rememberAvatar(avatar)
     val ui = com.plurali.app.ui.theme.LocalUi.current
     val ears = ui.avatarId == "cat" || ui.avatarId == "bunny"
@@ -201,7 +206,7 @@ fun Avatar(name: String, color: Long, avatar: String?, size: Dp = 44.dp, modifie
 @Composable
 fun SubjectAvatar(s: Subject?, size: Dp = 44.dp, modifier: Modifier = Modifier) {
     if (s == null) Avatar("?", 0xFF9E9E9E, null, size, modifier)
-    else Avatar(s.name, s.color, s.avatar, size, modifier)
+    else Avatar(s.name, s.color, s.avatar, size, modifier, frame = s.frame)
 }
 
 /** Copia a imagem escolhida para o armazenamento do app (quadrada, máx. 512px). */

@@ -130,7 +130,7 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
                         Modifier.align(Alignment.BottomStart).padding(start = 16.dp)
                             .size(116.dp).clip(com.plurali.app.ui.theme.LocalUi.current.avatarShape).background(PBg),
                         contentAlignment = Alignment.Center,
-                    ) { BigAvatar(p.name, p.color, p.avatar, 104.dp) }
+                    ) { BigAvatar(p.name, p.color, p.avatar, 104.dp, p.frame) }
                 }
             }
             item {
@@ -189,7 +189,7 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
                                 .then(if (other != null) Modifier.clickable { stack.add(other.id) } else Modifier).padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (other != null) { BigAvatar(other.name, other.color, other.avatar, 36.dp); Spacer(Modifier.width(10.dp)) }
+                            if (other != null) { BigAvatar(other.name, other.color, other.avatar, 36.dp, other.frame); Spacer(Modifier.width(10.dp)) }
                             Column(Modifier.weight(1f)) {
                                 Text(r.text)
                                 if (r.note.isNotBlank()) Text(r.note, style = MaterialTheme.typography.bodySmall, color = PMuted)
@@ -277,7 +277,8 @@ fun PersonScreen(s: Snapshot, start: SnapPerson, onBack: () -> Unit) {
 }
 
 @Composable
-private fun BigAvatar(name: String, color: Long, b64: String?, size: Dp) {
+private fun BigAvatar(name: String, color: Long, b64: String?, size: Dp, frame: String? = null) {
+    if (frame != null) { com.plurali.app.ui.theme.FramedAvatar(frame, size, color) { BigAvatar(name, color, b64, size) }; return }
     val bmp = remember(b64, MediaCache.version) { b64Image(b64) }
     val ui = com.plurali.app.ui.theme.LocalUi.current
     val ears = ui.avatarId == "cat" || ui.avatarId == "bunny"
